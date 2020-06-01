@@ -30,9 +30,10 @@ object FeatureProcess {
 		
 		val all_click_data = readAllClickData(sparkSession, dataPath, savePath, numPartitions).persist(StorageLevel.MEMORY_AND_DISK)
 		println("all_click_data count=", all_click_data.count())
-		val full_click_data = all_click_data.join(all_ad_data, usingColumn = "creative_id")
+		val full_click_data = all_click_data.join(all_ad_data, usingColumn = "creative_id").persist(StorageLevel.MEMORY_AND_DISK)
 		println("full click data")
 		full_click_data.show(false)
+		
 		
 		// 用户特征提取
 		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
@@ -63,6 +64,14 @@ object FeatureProcess {
 			count("product_category").as("pro_category_cnt"),
 			count("advertiser_id").as("advertiser_cnt"),
 			count("industry").as("industry_cnt"))
+		full_click_data.createTempView("txgg_temp")
+		val user_agg_sql =
+			s"""select user_id, count(distinct time) as active_days, count(distinct creative_id) as creative_cnt,
+			   | count(distinct ad_id) as ad_cnt, count(distinct product_id) as product_cnt,
+			   | count(distinct product_category) as pro_category_cnt, count(distinct advertiser_id) as advertiser_cnt,
+			   | count(distinct industy) as industry_cnt""".stripMargin
+		val user_agg = sparkSession.sql(user_agg_sql)
+		user_agg.show(false)
 		println("user feature info")
 		user_info.show(false)
 		user_info
