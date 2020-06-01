@@ -77,22 +77,23 @@ object FeatureProcess {
 					if (p._5 == "\\N") "63000" else p._5,
 					if (p._6 == "\\N") "400" else p._6))
 			.distinct()
-			.map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6)) // creative_id, ad_id, product_id, product_category, advertiser_id, industry
+			.map(p => Row(p._1.toInt, p._2, p._3, p._4, p._5, p._6)) // creative_id, ad_id, product_id, product_category, advertiser_id, industry
 		val schema = StructType(List(
 			StructField("creative_id", StringType), StructField("ad_id", StringType), StructField("product_id", StringType),
 			StructField("product_category", StringType), StructField("advertiser_id", StringType), StructField("industry", StringType)
 		))
 		val ad_df = sparkSession.createDataFrame(all_ad_data, schema)
-		println("all ad count=", ad_df.count())
+		println("all ad count=", ad_df.count())  // 3412773
 		println("all Ad data")
 		ad_df.show(false)
-		ad_df.repartition(2).write.format("tfrecords").option("recordType", "Example")
-			.mode("overwrite").save(savePath + s"/txpredict.tfrecords")
+//		ad_df.repartition(2).write.format("tfrecords").option("recordType", "Example")
+//			.mode("overwrite").save(savePath + s"/txpredict.tfrecords")
 		ad_df
 	}
 	def userFeatureProcess(full_click_data: Dataset[Row], sparkSession: SparkSession, savePath: String, numPartitions: Int): Dataset[Row]={
 		val user_grouped = full_click_data.groupBy("user_id")
-		val user_info = user_grouped.agg(sum("click_times").as("click_cnt"), count("time").as("active_days"))
+		val user_info = user_grouped.agg(sum("click_times").as("all_click_cnt"),
+			count("time").as("active_days"))
 		user_info.show(false)
 		null
 	}
