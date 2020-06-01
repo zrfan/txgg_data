@@ -53,17 +53,18 @@ object FeatureProcess {
 	
 	def userFeatureProcess(full_click_data: Dataset[Row], sparkSession: SparkSession, savePath: String, numPartitions: Int): Dataset[Row]={
 		val user_grouped = full_click_data.groupBy("user_id")
+		// 全部用户的平均点击数：35.679
 		val user_info = user_grouped.agg(sum("click_times").as("all_click_cnt"),
 			count("time").as("active_days"),
 			count("creative_id").as("creative_cnt"),
 			count("ad_id").as("ad_id_cnt"),
 			count("product_id").as("product_id_cnt"),
 			count("product_category").as("pro_category_cnt"),
-			count("advertiser").as("advertiser_cnt"),
+			count("advertiser_id").as("advertiser_cnt"),
 			count("industry").as("industry_cnt"))
 		println("user feature info")
 		user_info.show(false)
-		null
+		user_info
 	}
 	def readAllClickData(sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): Dataset[Row]={
 		val train_click_data = sparkSession.read.format("csv").option("header", "true")
