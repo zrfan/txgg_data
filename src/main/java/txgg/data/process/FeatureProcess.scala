@@ -11,7 +11,7 @@ object FeatureProcess {
 		println("args=", args.mkString(", "))
 		val func_name = args(0)
 		
-		val sparkSession = SparkSession.builder().appName("TxggDataTest")
+		val sparkSession = SparkSession.builder().appName("TxggDataTest") // 2.2.1
 			.getOrCreate()
 		val sparkContext = sparkSession.sparkContext
 		val sparkConf = sparkContext.getConf
@@ -66,6 +66,9 @@ object FeatureProcess {
 			println("please enter a funcname: userfeature / sequence_uid_ad / makegraph / ad_list")
 		}
 		
+	}
+	def userFeatureProcess(user_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, numPartitions: Int): Unit={
+	
 	}
 	def adFeatureProcess(ad_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, numPartitions: Int): Unit={
 		
