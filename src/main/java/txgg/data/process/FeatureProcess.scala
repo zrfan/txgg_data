@@ -34,9 +34,10 @@ object FeatureProcess {
 		println("full click data")
 		full_click_data.show(false)
 		
-		// 广告特征提取
-		
 		// 用户特征提取
+		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
+		
+		// 广告特征提取
 		
 		
 		if (func_name == "new_user_list") {
@@ -89,7 +90,10 @@ object FeatureProcess {
 			.mode("overwrite").save(savePath + s"/txpredict.tfrecords")
 		ad_df
 	}
-	def userFeatureProcess(user_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, numPartitions: Int): Dataset[Row]={
+	def userFeatureProcess(full_click_data: Dataset[Row], sparkSession: SparkSession, savePath: String, numPartitions: Int): Dataset[Row]={
+		val user_grouped = full_click_data.groupBy("user_id")
+		val user_click_count = user_grouped.sum("click_times")
+		user_click_count.show(false)
 		null
 	}
 	def adTrainFeatureProcess(train_ad_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, numPartitions: Int): Unit={
