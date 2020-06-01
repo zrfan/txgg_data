@@ -22,3 +22,5 @@ tf_jar_path="--jars /home/fzr/code/ecosystem/spark/spark-tensorflow-connector/ta
 spark-submit --name "txgg-data-preprocess" \
     --class txgg.data.process.FeatureProcess \
     ./target/txgg_data-1.0-SNAPSHOT.jar $funcname  > spark.log 2>&1 &
+
+tail -f spark.log

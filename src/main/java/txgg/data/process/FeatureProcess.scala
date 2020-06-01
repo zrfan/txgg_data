@@ -50,6 +50,21 @@ object FeatureProcess {
 		}
 		
 	}
+	
+	def userFeatureProcess(full_click_data: Dataset[Row], sparkSession: SparkSession, savePath: String, numPartitions: Int): Dataset[Row]={
+		val user_grouped = full_click_data.groupBy("user_id")
+		val user_info = user_grouped.agg(sum("click_times").as("all_click_cnt"),
+			count("time").as("active_days"),
+			count("creative_id").as("creative_cnt"),
+			count("ad_id").as("ad_id_cnt"),
+			count("product_id").as("product_id_cnt"),
+			count("product_category").as("pro_category_cnt"),
+			count("advertiser").as("advertiser_cnt"),
+			count("industry").as("industry_cnt"))
+		println("user feature info")
+		user_info.show(false)
+		null
+	}
 	def readAllClickData(sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): Dataset[Row]={
 		val train_click_data = sparkSession.read.format("csv").option("header", "true")
 			.load(dataPath + "/train_preliminary/click_log.csv")
@@ -72,12 +87,12 @@ object FeatureProcess {
 		val all_ad_data = train_ad_data.union(test_ad_data).repartition(numPartitions)
 			.map(p => (p._1,
 				if (p._2 == "\\N") "4000000" else p._2,
-					if (p._3 == "\\N") "60000" else p._3,
-					if (p._4 == "\\N") "30" else p._4,
-					if (p._5 == "\\N") "63000" else p._5,
-					if (p._6 == "\\N") "400" else p._6))
+				if (p._3 == "\\N") "60000" else p._3,
+				if (p._4 == "\\N") "30" else p._4,
+				if (p._5 == "\\N") "63000" else p._5,
+				if (p._6 == "\\N") "400" else p._6)).filter(p => p._1 != "creative_id")
 			.distinct()
-			.map(p => Row(p._1.toInt, p._2, p._3, p._4, p._5, p._6)) // creative_id, ad_id, product_id, product_category, advertiser_id, industry
+			.map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6)) // creative_id, ad_id, product_id, product_category, advertiser_id, industry
 		val schema = StructType(List(
 			StructField("creative_id", StringType), StructField("ad_id", StringType), StructField("product_id", StringType),
 			StructField("product_category", StringType), StructField("advertiser_id", StringType), StructField("industry", StringType)
@@ -86,16 +101,9 @@ object FeatureProcess {
 		println("all ad count=", ad_df.count())  // 3412773
 		println("all Ad data")
 		ad_df.show(false)
-//		ad_df.repartition(2).write.format("tfrecords").option("recordType", "Example")
-//			.mode("overwrite").save(savePath + s"/txpredict.tfrecords")
+		//		ad_df.repartition(2).write.format("tfrecords").option("recordType", "Example")
+		//			.mode("overwrite").save(savePath + s"/txpredict.tfrecords")
 		ad_df
-	}
-	def userFeatureProcess(full_click_data: Dataset[Row], sparkSession: SparkSession, savePath: String, numPartitions: Int): Dataset[Row]={
-		val user_grouped = full_click_data.groupBy("user_id")
-		val user_info = user_grouped.agg(sum("click_times").as("all_click_cnt"),
-			count("time").as("active_days"))
-		user_info.show(false)
-		null
 	}
 	def adTrainFeatureProcess(train_ad_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, numPartitions: Int): Unit={
 		
