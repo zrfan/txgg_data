@@ -38,7 +38,7 @@ object FeatureProcess {
 		// 用户特征提取
 		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
 		
-		// 广告特征提取
+		// 广告特征提取: 目标编码
 		val ad_train_feature = adTrainFeatureProcess(full_click_data, sparkSession, dataPath, numPartitions)
 		
 		
@@ -69,7 +69,10 @@ object FeatureProcess {
 			s"""select user_id, count(distinct time) as active_days, count(distinct creative_id) as creative_cnt,
 			   | count(distinct ad_id) as ad_cnt, count(distinct product_id) as product_cnt,
 			   | count(distinct product_category) as pro_category_cnt, count(distinct advertiser_id) as advertiser_cnt,
-			   | count(distinct industy) as industry_cnt""".stripMargin
+			   | count(distinct industry) as industry_cnt,
+			   | collect_list(time) as time_list, collect_list(creative_id) as creat_list,
+			   | collect_list(ad_id) as ad_list,
+			   |  from txgg_temp group by user_id order by time""".stripMargin
 		val user_agg = sparkSession.sql(user_agg_sql)
 		user_agg.show(false)
 		println("user feature info")
