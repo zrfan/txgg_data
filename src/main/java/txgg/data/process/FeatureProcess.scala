@@ -1,8 +1,10 @@
 package txgg.data.process
 
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql
 import org.apache.spark.sql.functions.{count, lit, sum}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql.{Dataset, Row, SQLContext, SparkSession}
+import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
 object FeatureProcess {
@@ -21,42 +23,20 @@ object FeatureProcess {
 		val savePath = "/home/fzr/txgg/data/processed/"
 		println("dataPath=", dataPath)
 		println("funcname=", func_name)
-		val train_ad_data = sparkSession.sparkContext.textFile(dataPath + "/train_preliminary/ad.csv")
-			.map(p => p.split(","))
-			.map(p => (p(0), p(1), p(2), p(3), p(4), p(5)))
+		val all_ad_data = readAllAdData(sparkSession, dataPath, savePath, numPartitions).persist(StorageLevel.MEMORY_AND_DISK)
 		
-		val test_ad_data = sparkSession.sparkContext.textFile(dataPath + "/test/ad.csv")
-			.map(p => p.split(","))
-			.map(p => (p(0), p(1), p(2), p(3), p(4), p(5)))
-		val all_ad_data = train_ad_data.union(test_ad_data).repartition(numPartitions)
-			.map(p => (p._1,
-				if (p._2 == "\\N") "4000000" else p._2,
-				if (p._3 == "\\N") "60000" else p._3,
-				if (p._4 == "\\N") "30" else p._4,
-				if (p._5 == "\\N") "63000" else p._5,
-				if (p._6 == "\\N") "400" else p._6)).distinct()
-			.persist(StorageLevel.MEMORY_AND_DISK)
 		all_ad_data.take(10).foreach(println)  // 去重后广告数3412773
 		println("all_ad_data count=", all_ad_data.count())
-		val train_click_data = sparkSession.read.format("csv").option("header", "true")
-			.load(dataPath + "/train_preliminary/click_log.csv")
-		val test_click_data = sparkSession.read.format("csv").option("header", "true")
-			.load(dataPath + "/test/click_log.csv").repartition(numPartitions)
-		val all_click_data = train_click_data.union(test_click_data).repartition(numPartitions)
-			.persist(StorageLevel.MEMORY_AND_DISK)
+		
+		val all_click_data = readAllClickData(sparkSession, dataPath, savePath, numPartitions).persist(StorageLevel.MEMORY_AND_DISK)
 		println("all_click_data count=", all_click_data.count())
-		val schema = StructType(List(
-			StructField("creative_id", StringType), StructField("ad_id", StringType), StructField("product_id", StringType),
-			StructField("product_category", StringType), StructField("advertiser_id", StringType), StructField("industry", StringType)
-		))
-		val predict_ad_data = train_ad_data
-			.map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6)) // user_id&label, ad_seq
-		val predict_ad_df = sparkSession.createDataFrame(predict_ad_data, schema)
-		println("predict result")
-		predict_ad_df.show(20, false)
-		println("predict count=", predict_ad_df.count())
-		predict_ad_df.repartition(2).write.format("tfrecords").option("recordType", "Example")
-			.mode("overwrite").save(savePath + s"/txpredict.tfrecords")
+		val full_click_data = all_click_data.join(all_ad_data, usingColumn = "creative_id")
+		println("full click data")
+		full_click_data.show(false)
+		
+		// 广告特征提取
+		
+		// 用户特征提取
 		
 		
 		if (func_name == "new_user_list") {
@@ -69,8 +49,48 @@ object FeatureProcess {
 		}
 		
 	}
-	def userFeatureProcess(user_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, numPartitions: Int): Unit={
-	
+	def readAllClickData(sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): Dataset[Row]={
+		val train_click_data = sparkSession.read.format("csv").option("header", "true")
+			.load(dataPath + "/train_preliminary/click_log.csv")
+		val test_click_data = sparkSession.read.format("csv").option("header", "true")
+			.load(dataPath + "/test/click_log.csv").repartition(numPartitions)
+		val all_click_data = train_click_data.union(test_click_data).repartition(numPartitions)
+		println("all click data")
+		all_click_data.show(false)
+		println("all click count=", all_click_data.count())
+		all_click_data
+	}
+	def readAllAdData(sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): sql.DataFrame ={
+		val train_ad_data = sparkSession.sparkContext.textFile(dataPath + "/train_preliminary/ad.csv")
+			.map(p => p.split(","))
+			.map(p => (p(0), p(1), p(2), p(3), p(4), p(5)))
+		
+		val test_ad_data = sparkSession.sparkContext.textFile(dataPath + "/test/ad.csv")
+			.map(p => p.split(","))
+			.map(p => (p(0), p(1), p(2), p(3), p(4), p(5)))
+		val all_ad_data = train_ad_data.union(test_ad_data).repartition(numPartitions)
+			.map(p => (p._1,
+				if (p._2 == "\\N") "4000000" else p._2,
+					if (p._3 == "\\N") "60000" else p._3,
+					if (p._4 == "\\N") "30" else p._4,
+					if (p._5 == "\\N") "63000" else p._5,
+					if (p._6 == "\\N") "400" else p._6))
+			.distinct()
+			.map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6)) // creative_id, ad_id, product_id, product_category, advertiser_id, industry
+		val schema = StructType(List(
+			StructField("creative_id", StringType), StructField("ad_id", StringType), StructField("product_id", StringType),
+			StructField("product_category", StringType), StructField("advertiser_id", StringType), StructField("industry", StringType)
+		))
+		val ad_df = sparkSession.createDataFrame(all_ad_data, schema)
+		println("all ad count=", ad_df.count())
+		println("all Ad data")
+		ad_df.show(false)
+		ad_df.repartition(2).write.format("tfrecords").option("recordType", "Example")
+			.mode("overwrite").save(savePath + s"/txpredict.tfrecords")
+		ad_df
+	}
+	def userFeatureProcess(user_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, numPartitions: Int): Dataset[Row]={
+		null
 	}
 	def adTrainFeatureProcess(train_ad_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, numPartitions: Int): Unit={
 		
