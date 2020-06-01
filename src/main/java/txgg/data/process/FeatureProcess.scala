@@ -72,15 +72,15 @@ object FeatureProcess {
 	def userFeatureProcess(user_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, numPartitions: Int): Unit={
 	
 	}
-	def adFeatureProcess(ad_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, numPartitions: Int): Unit={
+	def adTrainFeatureProcess(train_ad_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, numPartitions: Int): Unit={
 		
 		println("origin_data describe")
-		ad_data.describe().show(false)
+		train_ad_data.describe().show(false)
 		//		println("describe")
 		// 全部用户的平均点击数：35.679
 		
 		val K = 2
-		val splits = ad_data.randomSplit(Array(0.5, 0.5), seed = 2020L)
+		val splits = train_ad_data.randomSplit(Array(0.5, 0.5), seed = 2020L)
 		//		, "product_category", "advertiser_id"
 		val feature_names = Array("industry")
 		//		, "gender"
