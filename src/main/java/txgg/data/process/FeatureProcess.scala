@@ -92,7 +92,7 @@ object FeatureProcess {
 	}
 	def userFeatureProcess(full_click_data: Dataset[Row], sparkSession: SparkSession, savePath: String, numPartitions: Int): Dataset[Row]={
 		val user_grouped = full_click_data.groupBy("user_id")
-		val user_info = user_grouped.agg(sum("click_times"))
+		val user_info = user_grouped.agg(sum("click_times").as("click_cnt"), count("time").as("active_days"))
 		user_info.show(false)
 		null
 	}
