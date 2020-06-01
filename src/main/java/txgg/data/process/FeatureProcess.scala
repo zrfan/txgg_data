@@ -92,8 +92,8 @@ object FeatureProcess {
 	}
 	def userFeatureProcess(full_click_data: Dataset[Row], sparkSession: SparkSession, savePath: String, numPartitions: Int): Dataset[Row]={
 		val user_grouped = full_click_data.groupBy("user_id")
-		val user_click_count = user_grouped.sum("click_times")
-		user_click_count.show(false)
+		val user_info = user_grouped.agg(sum("click_times"))
+		user_info.show(false)
 		null
 	}
 	def adTrainFeatureProcess(train_ad_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, numPartitions: Int): Unit={
