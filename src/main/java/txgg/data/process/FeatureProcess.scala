@@ -23,14 +23,15 @@ object FeatureProcess {
 		val savePath = "/home/fzr/txgg/data/processed/"
 		println("dataPath=", dataPath)
 		println("funcname=", func_name)
-		val all_ad_data = readAllAdData(sparkSession, dataPath, savePath, numPartitions).persist(StorageLevel.MEMORY_AND_DISK)
+		val all_ad_data = readAllAdData(sparkSession, dataPath, savePath, numPartitions)
 		
 		all_ad_data.take(10).foreach(println) // 去重后广告数3412773
 		println("all_ad_data count=", all_ad_data.count())
 		
-		val all_click_data = readAllClickData(sparkSession, dataPath, savePath, numPartitions).persist(StorageLevel.MEMORY_AND_DISK) // user click age&gender
+		val all_click_data = readAllClickData(sparkSession, dataPath, savePath, numPartitions) // user click age&gender
 		println("all_click_data count=", all_click_data.count())
-		val full_click_data = all_click_data.join(all_ad_data, usingColumn = "creative_id").persist(StorageLevel.MEMORY_AND_DISK)
+		
+		val full_click_data = all_click_data.join(all_ad_data, usingColumn = "creative_id").repartition(numPartitions).persist(StorageLevel.MEMORY_AND_DISK)
 		println("full click data")
 		full_click_data.show(false)
 		
@@ -39,7 +40,10 @@ object FeatureProcess {
 		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
 		
 		// 广告特征提取: 目标编码
-		val ad_train_feature = adTrainFeatureProcess(full_click_data, sparkSession, dataPath, numPartitions)
+		val ad_train_feature = adTrainFeatureProcess(full_click_data.filter("age !=0 and gender != 0"),
+			sparkSession, dataPath, numPartitions)
+		
+		// 保存TFRecords文件
 		
 		
 		if (func_name == "new_user_list") {
@@ -90,9 +94,7 @@ object FeatureProcess {
 		val all_click_data = train_click_data.union(test_click_data).repartition(numPartitions)
 		val user_data = sparkSession.read.format("csv").option("header", "true")
 			.load(dataPath + "/train_preliminary/user.csv").repartition(numPartitions)
-		val click_user_data = all_click_data.join(user_data, usingColumn = "user_id").na.fill(Map(
-			"age" -> 0,
-			"gender" -> 0))
+		val click_user_data = all_click_data.join(user_data, usingColumn = "user_id").na.fill(Map("age" -> 0, "gender" -> 0))
 		println("all click data")
 		click_user_data.show(false)
 		println("all click count=", click_user_data.count())
@@ -106,12 +108,8 @@ object FeatureProcess {
 		val test_ad_data = sparkSession.read.format("csv").option("header", "true").load(dataPath + "/test/ad.csv")
 		
 		val all_ad_data = train_ad_data.union(test_ad_data).repartition(numPartitions)
-			.distinct().na.fill(Map(
-			"ad_id" -> 4000000,
-			"product_id" -> 60000,
-			"product_category" -> 30,
-			"advertiser_id" -> 63000,
-			"industry" -> 400)) // creative_id, ad_id, product_id, product_category, advertiser_id, industry
+			.distinct().na.fill(Map("ad_id" -> 4000000, "product_id" -> 60000, "product_category" -> 30,
+			"advertiser_id" -> 63000, "industry" -> 400)) // creative_id, ad_id, product_id, product_category, advertiser_id, industry
 		val schema = StructType(List(
 			StructField("creative_id", StringType), StructField("ad_id", StringType), StructField("product_id", StringType),
 			StructField("product_category", StringType), StructField("advertiser_id", StringType), StructField("industry", StringType)
@@ -125,15 +123,15 @@ object FeatureProcess {
 		all_ad_data
 	}
 	
-	def adTrainFeatureProcess(train_ad_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, numPartitions: Int): Unit = {
+	def adTrainFeatureProcess(train_click_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, numPartitions: Int): Unit = {
 		
 		println("origin_data describe")
-		train_ad_data.describe().show(false)
+		train_click_data.describe().show(false)
 		//		println("describe")
 		// 全部用户的平均点击数：35.679
 		
 		val K = 2
-		val splits = train_ad_data.randomSplit(Array(0.5, 0.5), seed = 2020L)
+		val splits = train_click_data.randomSplit(Array(0.5, 0.5), seed = 2020L)
 		//		, "product_category", "advertiser_id"
 		val feature_names = Array("industry")
 		//		, "gender"
@@ -149,7 +147,7 @@ object FeatureProcess {
 			}
 		}
 		val fold_data = splits(0).persist(StorageLevel.MEMORY_AND_DISK)
-		train_ad_data.unpersist()
+		train_click_data.unpersist()
 		var encoded_data: Dataset[Row] = null
 		// 五折统计目标编码
 		for (k <- Array.range(0, K)) {
