@@ -17,9 +17,10 @@ echo "funcname=$funcname"
 
 mvn package
 
-tf_jar_path="--jars /home/fzr/code/ecosystem/spark/spark-tensorflow-connector/target/spark-tensorflow-connector_2.12-1.10.0.jar"
-# $tf_jar_path \
+tf_jar_path="--jars /home/fzr/env/spark-tensorflow-connector_2.11-1.10.0.jar"
+#
 spark-submit --name "txgg-data-preprocess" \
+    $tf_jar_path \
     --class txgg.data.process.FeatureProcess \
     ./target/txgg_data-1.0-SNAPSHOT.jar $funcname  > spark.log 2>&1 &
 
