@@ -28,7 +28,7 @@ object FeatureProcess {
 		all_ad_data.take(10).foreach(println) // 去重后广告数3412773
 		println("all_ad_data count=", all_ad_data.count())
 		
-		val all_click_data = readAllClickData(sparkSession, dataPath, savePath, numPartitions).persist(StorageLevel.MEMORY_AND_DISK)
+		val all_click_data = readAllClickData(sparkSession, dataPath, savePath, numPartitions).persist(StorageLevel.MEMORY_AND_DISK) // user click age&gender
 		println("all_click_data count=", all_click_data.count())
 		val full_click_data = all_click_data.join(all_ad_data, usingColumn = "creative_id").persist(StorageLevel.MEMORY_AND_DISK)
 		println("full click data")
@@ -72,7 +72,7 @@ object FeatureProcess {
 			   | count(distinct industry) as industry_cnt,
 			   | collect_list(time) as time_list, collect_list(creative_id) as creat_list, collect_list(ad_id) as ad_list,
 			   | collect_set(product_id) as product_set, collect_set(product_category) as product_category_set,
-			   | collect_set(advertiser) as advertiser_set, collect_set(industry) as industry_set,
+			   | collect_set(advertiser) as advertiser_set, collect_set(industry) as industry_set
 			   |  from txgg_temp group by user_id order by time""".stripMargin
 		val user_agg = sparkSession.sql(user_agg_sql)
 		println("user_agg info")
@@ -93,7 +93,6 @@ object FeatureProcess {
 		val click_user_data = all_click_data.join(user_data, usingColumn = "user_id").na.fill(Map(
 			"age" -> 0,
 			"gender" -> 0))
-		
 		println("all click data")
 		click_user_data.show(false)
 		println("all click count=", click_user_data.count())
