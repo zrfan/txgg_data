@@ -44,7 +44,7 @@ object FeatureProcess {
 			.load(dataPath + "/test/click_log.csv").repartition(numPartitions)
 		val all_click_data = train_click_data.union(test_click_data).repartition(numPartitions)
 			.persist(StorageLevel.MEMORY_AND_DISK)
-		println("all_click_data count=", all_ad_data.count())
+		println("all_click_data count=", all_click_data.count())
 		val schema = StructType(List(
 			StructField("creative_id", StringType), StructField("ad_id", StringType), StructField("product_id", StringType),
 			StructField("product_category", StringType), StructField("advertiser_id", StringType), StructField("industry", StringType)
