@@ -36,13 +36,15 @@ object FeatureProcess {
 				if (p._5 == "\\N") "63000" else p._5,
 				if (p._6 == "\\N") "400" else p._6)).distinct()
 			.persist(StorageLevel.MEMORY_AND_DISK)
-		all_ad_data.take(10).foreach(println)
+		all_ad_data.take(10).foreach(println)  // 去重后广告数3412773
 		println("all_ad_data count=", all_ad_data.count())
-//		val train_click_data = sparkSession.read.format("csv").option("header", "true")
-//			.load(dataPath + "/train_preliminary/click_log.csv").repartition(numPartitions).rdd
-//			.map(p => (p.getAs[String]("creative_id"),
-//				(p.getAs[String]("user_id"), p.getAs[String]("time"), p.getAs[String]("click_times"))))
-//			.repartition(numPartitions).persist(StorageLevel.MEMORY_AND_DISK)
+		val train_click_data = sparkSession.read.format("csv").option("header", "true")
+			.load(dataPath + "/train_preliminary/click_log.csv")
+		val test_click_data = sparkSession.read.format("csv").option("header", "true")
+			.load(dataPath + "/test/click_log.csv").repartition(numPartitions)
+		val all_click_data = train_click_data.union(test_click_data).repartition(numPartitions)
+			.persist(StorageLevel.MEMORY_AND_DISK)
+		println("all_click_data count=", all_ad_data.count())
 		val schema = StructType(List(
 			StructField("creative_id", StringType), StructField("ad_id", StringType), StructField("product_id", StringType),
 			StructField("product_category", StringType), StructField("advertiser_id", StringType), StructField("industry", StringType)
