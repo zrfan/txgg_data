@@ -96,7 +96,7 @@ object FeatureProcess {
 			}
 		}
 		val fold_data = splits(0).persist(StorageLevel.MEMORY_AND_DISK)
-		ad_data.unpersist()
+		train_ad_data.unpersist()
 		var encoded_data: Dataset[Row] = null
 		// 五折统计目标编码
 		for (k <- Array.range(0, K)){
