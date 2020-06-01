@@ -70,10 +70,12 @@ object FeatureProcess {
 			   | count(distinct ad_id) as ad_cnt, count(distinct product_id) as product_cnt,
 			   | count(distinct product_category) as pro_category_cnt, count(distinct advertiser_id) as advertiser_cnt,
 			   | count(distinct industry) as industry_cnt,
-			   | collect_list(time) as time_list, collect_list(creative_id) as creat_list,
-			   | collect_list(ad_id) as ad_list,
+			   | collect_list(time) as time_list, collect_list(creative_id) as creat_list, collect_list(ad_id) as ad_list,
+			   | collect_set(product_id) as product_set, collect_set(product_category) as product_category_set,
+			   | collect_set(advertiser) as advertiser_set, collect_set(industry) as industry_set,
 			   |  from txgg_temp group by user_id order by time""".stripMargin
 		val user_agg = sparkSession.sql(user_agg_sql)
+		println("user_agg info")
 		user_agg.show(false)
 		println("user feature info")
 		user_info.show(false)
@@ -89,11 +91,6 @@ object FeatureProcess {
 		val user_data = sparkSession.read.format("csv").option("header", "true")
 			.load(dataPath + "/train_preliminary/user.csv").repartition(numPartitions)
 		val click_user_data = all_click_data.join(user_data, usingColumn = "user_id").na.fill(Map(
-			"ad_id" -> 4000000,
-			"product_id" -> 60000,
-			"product_category" -> 30,
-			"advertiser_id" -> 63000,
-			"industry" -> 400,
 			"age" -> 0,
 			"gender" -> 0))
 		
@@ -110,7 +107,12 @@ object FeatureProcess {
 		val test_ad_data = sparkSession.read.format("csv").option("header", "true").load(dataPath + "/test/ad.csv")
 		
 		val all_ad_data = train_ad_data.union(test_ad_data).repartition(numPartitions)
-			.distinct() // creative_id, ad_id, product_id, product_category, advertiser_id, industry
+			.distinct().na.fill(Map(
+			"ad_id" -> 4000000,
+			"product_id" -> 60000,
+			"product_category" -> 30,
+			"advertiser_id" -> 63000,
+			"industry" -> 400)) // creative_id, ad_id, product_id, product_category, advertiser_id, industry
 		val schema = StructType(List(
 			StructField("creative_id", StringType), StructField("ad_id", StringType), StructField("product_id", StringType),
 			StructField("product_category", StringType), StructField("advertiser_id", StringType), StructField("industry", StringType)
