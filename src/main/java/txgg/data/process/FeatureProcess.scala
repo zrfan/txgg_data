@@ -128,14 +128,14 @@ object FeatureProcess {
 			   |  from (select * from txgg_temp order by time) as A group by user_id, age, gender """.stripMargin
 		val user_agg = sparkSession.sql(user_agg_sql)
 		println("user_agg info")
-		def getDuring(time_list: Array[Float]): Array[Float] ={
-			val dur_list = time_list.sorted.sliding(2).map(x => x.last - x.head).toList
+		def getDuring(time_list: Array[Int]): Array[Float] ={
+			val dur_list = time_list.map(x => x.toFloat).sorted.sliding(2).map(x => x.last - x.head).toList
 			val mean_dur = dur_list.sum/dur_list.length
 			val max_dur = dur_list.max
 			val min_dur = dur_list.min
 			Array(mean_dur, max_dur, min_dur)
 		}
-		val durUDF = udf((time_list:Array[Float]) => {getDuring(time_list)})
+		val durUDF = udf((time_list:Array[Int]) => {getDuring(time_list)})
 		val test = user_agg.withColumn("active_avg_clicks", user_agg("all_click_cnt")*1.0/user_agg("active_days"))
 			.withColumn("dur", durUDF(col("time_list")))
 			.select(col("dur").getItem(0).as("mean_dur"),
