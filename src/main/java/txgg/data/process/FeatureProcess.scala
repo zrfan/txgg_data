@@ -146,7 +146,7 @@ object FeatureProcess {
 		val max_feature_names = Array("product_id", "product_category", "advertiser_id", "industry")
 		for (name <- max_feature_names){
 			val user_max_click_sql =
-				s"""select a.user_id, $name, cnt from (
+				s"""select a.user_id, a.$name, a.cnt from (
 				   | select user_id, $name, sum(click_times) as cnt,
 				   |  row_number() over (partition by $name order by cnt desc) rank
 				   | from txgg_temp group by user_id, $name ) a where a.rank=1""".stripMargin
