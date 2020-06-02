@@ -48,10 +48,10 @@ object FeatureProcess {
 		println("user_feature")
 		
 		val all_feature_cols = Array("all_click_cnt", "active_days", "creative_cnt", "ad_cnt", "product_cnt",
-			"category_cnt", "advertiser_cnt", "industry_cnt")
+			"category_cnt", "advertiser_cnt", "industry_cnt", "mean_dur")
 		
 		val all_data = user_feature.select("user_id", "age", "gender", "all_click_cnt", "active_days", "creative_cnt",
-			"ad_cnt", "product_cnt", "category_cnt", "advertiser_cnt", "industry_cnt")
+			"ad_cnt", "product_cnt", "category_cnt", "advertiser_cnt", "industry_cnt", "mean_dur")
 		println("all_data")
 		all_data.show(200, false)
 		
@@ -144,7 +144,7 @@ object FeatureProcess {
 		println("test mean dur")
 		test.show(false)
 		val user_max_product_sql =
-			s"""select a.* from (
+			s"""select a.user_id, product_category, cnt from (
 			   | select user_id, product_category, sum(click_times) as cnt,
 			   |  row_number() over (partition by product_category order by cnt desc) rank
 			   | from txgg_temp group by user_id, product_category ) a where a.rank=1""".stripMargin
