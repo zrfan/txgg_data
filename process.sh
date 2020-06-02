@@ -26,4 +26,4 @@ spark-submit --name "txgg-data-preprocess" \
     ./target/txgg_data-1.0-SNAPSHOT-jar-with-dependencies.jar $funcname > txgg.log 2>&1 &
 #    ./target/txgg_data-1.0-SNAPSHOT.jar $funcname  > spark.log 2>&1 &
 
-tail -f spark.log
+tail -f txgg.log
