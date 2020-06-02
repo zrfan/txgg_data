@@ -11,6 +11,8 @@ import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructT
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
+import scala.reflect.internal.util.TableDef.Column
+
 object FeatureProcess {
 	def main(args: Array[String]): Unit = {
 		if (args.length == 0) print("Please set parameter")
@@ -49,24 +51,29 @@ object FeatureProcess {
 			.show(false)
 		val all_feature_cols = Array("all_click_cnt", "active_days", "creative_cnt", "ad_id_cnt", "product_id_cnt",
 			"category_cnt", "advertiser_cnt", "industry_cnt")
+		def decreaseAge(arg:Int): Unit ={
+			(arg-1)*1.0
+		}
 		val all_train = user_feature.select("user_id", "age", "gender", "all_click_cnt", "active_days", "creative_cnt",
-			"ad_id_cnt", "product_id_cnt", "category_cnt", "advertiser_cnt", "industry_cnt").filter("age!=0 and gender!=0")
+			"ad_id_cnt", "product_id_cnt", "category_cnt", "advertiser_cnt", "industry_cnt")
+			.filter("age!=0 and gender!=0").withColumn("label", user_feature("age")*1.0-1.0)
 		
 		println("all_train data")
 		all_train.show(200, false)
 		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("assembed_features")
-		val labelIndexer = new StringIndexer().setInputCol("age").setOutputCol("age_reindex").fit(all_train)
-		println("labels:", labelIndexer.labels.mkString(" ; "))
-		val tmp = labelIndexer.transform(all_train)
-		println("transform labelInderer")
-		tmp.show(false)
+//		val labelIndexer = new StringIndexer().setInputCol("age").setOutputCol("age_reindex").fit(all_train)
+//		println("labels:", labelIndexer.labels.mkString(" ; "))
+//		val tmp = labelIndexer.transform(all_train)
+//		println("transform labelInderer")
+//		tmp.show(false)
 		
-		val lightgbm = new LightGBMClassifier().setLabelCol("age_reindex").setFeaturesCol("assembed_features")
+		val lightgbm = new LightGBMClassifier().setLabelCol("label").setFeaturesCol("assembed_features")
 			.setPredictionCol("predict_label").setProbabilityCol("probability")
-		val labelConverter = new IndexToString().setInputCol("predict_label").setOutputCol("predict_age").setLabels(labelIndexer.labels)
+//		val labelConverter = new IndexToString().setInputCol("predict_label").setOutputCol("predict_age")
+//			.setLabels(Array("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"))
 		
 		val Array(train, test) = all_train.randomSplit(Array(0.7, 0.3), seed = 2020L)
-		val pipeline = new Pipeline().setStages(Array(labelIndexer, assembler, lightgbm, labelConverter))
+		val pipeline = new Pipeline().setStages(Array(assembler, lightgbm))
 		
 		val model = pipeline.fit(train)
 		
