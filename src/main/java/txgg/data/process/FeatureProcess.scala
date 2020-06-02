@@ -41,45 +41,48 @@ object FeatureProcess {
 		all_ad_data.show(50, false)
 		all_click_data.show(50, false)
 		
-		val full_click_data = all_click_data.join(all_ad_data, usingColumns = Seq("creative_id"), joinType = "left_outer")
-			.repartition(numPartitions)
-			.persist(StorageLevel.MEMORY_AND_DISK)
-		println("full click data after join")
-		full_click_data.show(50, false)
+//		val full_click_data = all_click_data.join(all_ad_data, usingColumns = Seq("creative_id"), joinType = "left_outer")
+//			.repartition(numPartitions)
+//			.persist(StorageLevel.MEMORY_AND_DISK)
+//		println("full click data after join")
+//		full_click_data.show(50, false)
+//
+//
+//		// 用户特征提取
+//		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
+//		println("user_feature")
+//		user_feature.show(false)
+//
+//		val all_feature_cols = Array("all_click_cnt", "active_days", "creative_cnt", "ad_cnt", "product_cnt",
+//			"category_cnt", "advertiser_cnt", "industry_cnt",
+//			"mean_dur", "max_dur", "min_dur",
+//			"max_click_product_id", "max_click_product_category", "max_click_advertiser_id", "max_click_industry")
+//
+//		val all_data = user_feature.select((all_feature_cols ++ Array("user_id", "age", "gender")).map(x => col(x)): _*)
+//		println("all_data")
+//		all_data.show(200, false)
+//
+//		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("features")
+//		val all_assembled_data = assembler.transform(all_data)
+//		println("assembled")
+//		all_assembled_data.show(false)
+//		val all_train = all_assembled_data.filter("age!=0 and gender!=0").withColumn("label", user_feature("gender")*1.0-1.0)
+//
+//		// train
+//		val lightgbm = new LightGBMClassifier().setLabelCol("label").setFeaturesCol("features")
+//			.setPredictionCol("predict_label").setProbabilityCol("probability")
+//		val Array(train, test) = all_train.randomSplit(Array(0.7, 0.3), seed = 2020L)
+//		val model = lightgbm.fit(train)
+//
+//		val val_res = model.transform(test)
+//		println("val_res=", val_res)
+//		val_res.show(false)
+//		val evaluator = new BinaryClassificationEvaluator().setLabelCol("label").setRawPredictionCol("predict_label")
+////		val evaluator = new MulticlassClassificationEvaluator().setLabelCol("label").setPredictionCol("predict_label")
+//		println("evalutor=", evaluator.evaluate(val_res))
 		
 		
-		// 用户特征提取
-		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
-		println("user_feature")
-		user_feature.show(false)
 		
-		val all_feature_cols = Array("all_click_cnt", "active_days", "creative_cnt", "ad_cnt", "product_cnt",
-			"category_cnt", "advertiser_cnt", "industry_cnt",
-			"mean_dur", "max_dur", "min_dur",
-			"max_click_product_id", "max_click_product_category", "max_click_advertiser_id", "max_click_industry")
-		
-		val all_data = user_feature.select((all_feature_cols ++ Array("user_id", "age", "gender")).map(x => col(x)): _*)
-		println("all_data")
-		all_data.show(200, false)
-		
-		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("features")
-		val all_assembled_data = assembler.transform(all_data)
-		println("assembled")
-		all_assembled_data.show(false)
-		val all_train = all_assembled_data.filter("age!=0 and gender!=0").withColumn("label", user_feature("gender")*1.0-1.0)
-		
-		// train
-		val lightgbm = new LightGBMClassifier().setLabelCol("label").setFeaturesCol("features")
-			.setPredictionCol("predict_label").setProbabilityCol("probability")
-		val Array(train, test) = all_train.randomSplit(Array(0.7, 0.3), seed = 2020L)
-		val model = lightgbm.fit(train)
-		
-		val val_res = model.transform(test)
-		println("val_res=", val_res)
-		val_res.show(false)
-		val evaluator = new BinaryClassificationEvaluator().setLabelCol("label").setRawPredictionCol("predict_label")
-//		val evaluator = new MulticlassClassificationEvaluator().setLabelCol("label").setPredictionCol("predict_label")
-		println("evalutor=", evaluator.evaluate(val_res))
 		//predict
 //		val predict = all_assembled_data.filter("age=0 and gender=0")
 //		println("predict data=")
