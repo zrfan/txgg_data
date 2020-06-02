@@ -146,10 +146,10 @@ object FeatureProcess {
 		val max_feature_names = Array("product_id", "product_category", "advertiser_id", "industry")
 		for (name <- max_feature_names){
 			val user_max_click_sql =
-				s"""select a.user_id, a.$name, a.cnt from (
-				   | select user_id, $name, sum(click_times) cnt,
-				   |  row_number() over (partition by $name order by cnt desc) rank
-				   | from txgg_temp group by user_id, $name ) a where a.rank=1""".stripMargin
+				s"""select b.user_id, b.$name, b.cnt from (
+				   |    select user_id, $name, cnt, row_number() over (partition by user_id order by cnt desc) rank
+				   |    from ( select user_id, $name, sum(click_times) as cnt from txgg_temp group by user_id, $name) a
+				   |  ) b where b.rank=1""".stripMargin
 			val user_max_product = sparkSession.sql(user_max_click_sql)
 			println("user_max_click data")
 			user_max_product.show(false)
