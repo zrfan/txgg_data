@@ -24,7 +24,7 @@ object FeatureProcess {
 		val sparkContext = sparkSession.sparkContext
 		val sparkConf = sparkContext.getConf
 		val sqlContext = new SQLContext(sparkContext)
-		val numPartitions = 260
+		val numPartitions = 160
 		val dataPath = "/home/fzr/txgg/data/origin/"
 		val savePath = "/home/fzr/txgg/data/processed/"
 		println("dataPath=", dataPath)
@@ -46,27 +46,26 @@ object FeatureProcess {
 		// 用户特征提取
 		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
 		println("user_feature")
-		user_feature.select("user_id", "age", "gender", "all_click_cnt", "active_days", "creative_cnt",
-			"ad_cnt", "product_cnt", "category_cnt", "advertiser_cnt", "industry_cnt")
-			.show(false)
+		
 		val all_feature_cols = Array("all_click_cnt", "active_days", "creative_cnt", "ad_cnt", "product_cnt",
 			"category_cnt", "advertiser_cnt", "industry_cnt")
 		
-		val all_train_data = user_feature.select("user_id", "age", "gender", "all_click_cnt", "active_days", "creative_cnt",
+		val all_data = user_feature.select("user_id", "age", "gender", "all_click_cnt", "active_days", "creative_cnt",
 			"ad_cnt", "product_cnt", "category_cnt", "advertiser_cnt", "industry_cnt")
-			.filter("age!=0 and gender!=0").withColumn("label", user_feature("age")*1.0-1.0)
+		println("all_data")
+		all_data.show(200, false)
 		
-		println("all_train data")
-		all_train_data.show(200, false)
 		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("assembled_features")
+		val all_assembled_data = assembler.transform(all_data)
+		println("assembled")
+		all_assembled_data.show(false)
 //		val labelIndexer = new StringIndexer().setInputCol("age").setOutputCol("age_reindex").fit(all_train)
 //		println("labels:", labelIndexer.labels.mkString(" ; "))
 //		val tmp = labelIndexer.transform(all_train)
 //		println("transform labelInderer")
 //		tmp.show(false)
-		val all_train = assembler.transform(all_train_data)
-		println("assembled")
-		all_train.show(false)
+		val all_train = all_assembled_data.filter("age!=0 and gender!=0").withColumn("label", user_feature("gender")*1.0-1.0)
+		
 		
 		val lightgbm = new LightGBMClassifier().setLabelCol("label").setFeaturesCol("assembled_features")
 			.setPredictionCol("predict_label").setProbabilityCol("probability")
