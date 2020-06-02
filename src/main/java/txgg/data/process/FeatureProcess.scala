@@ -61,6 +61,13 @@ object FeatureProcess {
 		val evaluator = new MulticlassClassificationEvaluator().setLabelCol("age").setPredictionCol("predict")
 		println("evalutor=", evaluator.evaluate(val_res))
 		
+		val predict = user_feature.filter("age=0 and gender=0")
+		println("predict data=")
+		predict.show(false)
+		val predict_res = model.transform(predict)
+		println("predict_res=")
+		predict_res.show(false)
+		
 		// 广告特征提取: 目标编码
 //		val ad_train_feature = adTrainFeatureProcess(full_click_data.filter("age !=0 and gender != 0"),
 //			sparkSession, dataPath, numPartitions)
@@ -102,6 +109,7 @@ object FeatureProcess {
 			   |  from (select * from txgg_temp order by time) as A group by user_id, age, gender """.stripMargin
 		val user_agg = sparkSession.sql(user_agg_sql)
 		println("user_agg info")
+//		val test = user_agg.withColumn("mean_dur", )
 		user_agg.show(false)
 		println("user feature info")
 		user_info.show(false)
