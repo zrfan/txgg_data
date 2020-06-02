@@ -48,9 +48,9 @@ object FeatureProcess {
 		val all_train = user_feature.filter("age!=0 and gender!=0")
 		val all_feature_cols = Array("click_times", "active_days", "creative_cnt", "ad_id_cnt", "product_id_cnt",
 			"category_cnt", "advertiser_cnt", "industry_cnt")
-		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("features")
+		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("assembed_features")
 		
-		val lightgbm = new LightGBMClassifier().setLabelCol("age").setFeaturesCol("features")
+		val lightgbm = new LightGBMClassifier().setLabelCol("age").setFeaturesCol("assembed_features")
 			.setPredictionCol("predict").setProbabilityCol("probability")
 		val pipeline = new Pipeline().setStages(Array(assembler, lightgbm))
 		val Array(train, test) = all_train.randomSplit(Array(0.7, 0.3), seed = 2020L)
