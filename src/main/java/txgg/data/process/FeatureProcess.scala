@@ -6,7 +6,7 @@ import org.apache.spark.ml.evaluation.{BinaryClassificationEvaluator, Multiclass
 import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql
-import org.apache.spark.sql.functions.{count, lit, sum, udf}
+import org.apache.spark.sql.functions.{count, lit, sum, udf, col}
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
@@ -128,13 +128,18 @@ object FeatureProcess {
 			   |  from (select * from txgg_temp order by time) as A group by user_id, age, gender """.stripMargin
 		val user_agg = sparkSession.sql(user_agg_sql)
 		println("user_agg info")
-		def getDuring(time_list: Array[String]): Unit ={
+		def getDuring(time_list: Array[String]): Array[Float] ={
 			val dur_list = time_list.map(x => x.toFloat).sorted.sliding(2).map(x => x.last - x.head).toList
 			val mean_dur = dur_list.sum/dur_list.length
-			mean_dur
+			val max_dur = dur_list.max
+			val min_dur = dur_list.min
+			Array(mean_dur, max_dur, min_dur)
 		}
 		val udfFunc = udf((a:Row) => {getDuring(a.getAs("time_list"))})
-		val test = user_agg.withColumn("mean_dur", udfFunc())
+		val test = user_agg.withColumn("dur", udfFunc())
+			.select(col("dur").getItem(0).as("mean_dur"),
+				col("dur").getItem(1).as("max_dur"),
+				col("dur").getItem(2).as("min_dur"))
 		println("test mean dur")
 		test.show(false)
 //		user_agg.show(false)
