@@ -46,7 +46,7 @@ object FeatureProcess {
 		println("user_feature")
 		user_feature.show(false)
 		val all_train = user_feature.filter("age!=0 and gender!=0")
-		val all_feature_cols = Array("click_times", "active_days", "creative_cnt", "ad_id_cnt", "product_id_cnt",
+		val all_feature_cols = Array("all_click_cnt", "active_days", "creative_cnt", "ad_id_cnt", "product_id_cnt",
 			"category_cnt", "advertiser_cnt", "industry_cnt")
 		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("assembed_features")
 		
