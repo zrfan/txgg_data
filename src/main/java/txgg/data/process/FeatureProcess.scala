@@ -41,60 +41,59 @@ object FeatureProcess {
 		all_ad_data.show(50, false)
 		all_click_data.show(50, false)
 		
-//		val full_click_data = all_click_data.join(all_ad_data, usingColumns = Seq("creative_id"), joinType = "left_outer")
-//			.repartition(numPartitions)
-//			.persist(StorageLevel.MEMORY_AND_DISK)
-//		println("full click data after join")
-//		full_click_data.show(50, false)
-//
-//
-//		// 用户特征提取
-//		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
-//		println("user_feature")
-//		user_feature.show(false)
-//
-//		val all_feature_cols = Array("all_click_cnt", "active_days", "creative_cnt", "ad_cnt", "product_cnt",
-//			"category_cnt", "advertiser_cnt", "industry_cnt",
-//			"mean_dur", "max_dur", "min_dur",
-//			"max_click_product_id", "max_click_product_category", "max_click_advertiser_id", "max_click_industry")
-//
-//		val all_data = user_feature.select((all_feature_cols ++ Array("user_id", "age", "gender")).map(x => col(x)): _*)
-//		println("all_data")
-//		all_data.show(200, false)
-//
-//		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("features")
-//		val all_assembled_data = assembler.transform(all_data)
-//		println("assembled")
-//		all_assembled_data.show(false)
-//		val all_train = all_assembled_data.filter("age!=0 and gender!=0").withColumn("label", user_feature("gender")*1.0-1.0)
-//
-//		// train
-//		val lightgbm = new LightGBMClassifier().setLabelCol("label").setFeaturesCol("features")
-//			.setPredictionCol("predict_label").setProbabilityCol("probability")
-//		val Array(train, test) = all_train.randomSplit(Array(0.7, 0.3), seed = 2020L)
-//		val model = lightgbm.fit(train)
-//
-//		val val_res = model.transform(test)
-//		println("val_res=", val_res)
-//		val_res.show(false)
-//		val evaluator = new BinaryClassificationEvaluator().setLabelCol("label").setRawPredictionCol("predict_label")
-////		val evaluator = new MulticlassClassificationEvaluator().setLabelCol("label").setPredictionCol("predict_label")
-//		println("evalutor=", evaluator.evaluate(val_res))
-		
+		//		val full_click_data = all_click_data.join(all_ad_data, usingColumns = Seq("creative_id"), joinType = "left_outer")
+		//			.repartition(numPartitions)
+		//			.persist(StorageLevel.MEMORY_AND_DISK)
+		//		println("full click data after join")
+		//		full_click_data.show(50, false)
+		//
+		//
+		//		// 用户特征提取
+		//		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
+		//		println("user_feature")
+		//		user_feature.show(false)
+		//
+		//		val all_feature_cols = Array("all_click_cnt", "active_days", "creative_cnt", "ad_cnt", "product_cnt",
+		//			"category_cnt", "advertiser_cnt", "industry_cnt",
+		//			"mean_dur", "max_dur", "min_dur",
+		//			"max_click_product_id", "max_click_product_category", "max_click_advertiser_id", "max_click_industry")
+		//
+		//		val all_data = user_feature.select((all_feature_cols ++ Array("user_id", "age", "gender")).map(x => col(x)): _*)
+		//		println("all_data")
+		//		all_data.show(200, false)
+		//
+		//		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("features")
+		//		val all_assembled_data = assembler.transform(all_data)
+		//		println("assembled")
+		//		all_assembled_data.show(false)
+		//		val all_train = all_assembled_data.filter("age!=0 and gender!=0").withColumn("label", user_feature("gender")*1.0-1.0)
+		//
+		//		// train
+		//		val lightgbm = new LightGBMClassifier().setLabelCol("label").setFeaturesCol("features")
+		//			.setPredictionCol("predict_label").setProbabilityCol("probability")
+		//		val Array(train, test) = all_train.randomSplit(Array(0.7, 0.3), seed = 2020L)
+		//		val model = lightgbm.fit(train)
+		//
+		//		val val_res = model.transform(test)
+		//		println("val_res=", val_res)
+		//		val_res.show(false)
+		//		val evaluator = new BinaryClassificationEvaluator().setLabelCol("label").setRawPredictionCol("predict_label")
+		////		val evaluator = new MulticlassClassificationEvaluator().setLabelCol("label").setPredictionCol("predict_label")
+		//		println("evalutor=", evaluator.evaluate(val_res))
 		
 		
 		//predict
-//		val predict = all_assembled_data.filter("age=0 and gender=0")
-//		println("predict data=")
-//		predict.show(false)
-//		println("predict_data count=", predict.count())
-//		val predict_res = model.transform(predict)
-//		println("predict_res=")
-//		predict_res.show(false)
+		//		val predict = all_assembled_data.filter("age=0 and gender=0")
+		//		println("predict data=")
+		//		predict.show(false)
+		//		println("predict_data count=", predict.count())
+		//		val predict_res = model.transform(predict)
+		//		println("predict_res=")
+		//		predict_res.show(false)
 		
 		// 广告特征提取: 目标编码
-//		val ad_train_feature = adTrainFeatureProcess(full_click_data.filter("age !=0 and gender != 0"),
-//			sparkSession, dataPath, numPartitions)
+		//		val ad_train_feature = adTrainFeatureProcess(full_click_data.filter("age !=0 and gender != 0"),
+		//			sparkSession, dataPath, numPartitions)
 		
 		// 保存TFRecords文件
 	}
@@ -115,16 +114,20 @@ object FeatureProcess {
 			   | from (select * from txgg_temp order by time) as A group by user_id, age, gender """.stripMargin
 		var user_agg = sparkSession.sql(user_agg_sql)
 		println("user_agg info")
+		
 		// 点击间隔统计
-		def getDuring(time_list: scala.collection.mutable.WrappedArray[Int]): Array[Float] ={
+		def getDuring(time_list: scala.collection.mutable.WrappedArray[Int]): Array[Float] = {
 			val dur_list = time_list.map(x => x.toFloat).sorted.sliding(2).map(x => x.last - x.head).toList
-			val mean_dur = dur_list.sum/dur_list.length
+			val mean_dur = dur_list.sum / dur_list.length
 			val max_dur = dur_list.max
 			val min_dur = dur_list.min
 			Array(mean_dur, max_dur, min_dur)
 		}
-		val durUDF = udf((time_list:scala.collection.mutable.WrappedArray[Int]) => {getDuring(time_list)})
-		val user_dur = user_agg.withColumn("active_avg_clicks", user_agg("all_click_cnt")*1.0/user_agg("active_days"))
+		
+		val durUDF = udf((time_list: scala.collection.mutable.WrappedArray[Int]) => {
+			getDuring(time_list)
+		})
+		val user_dur = user_agg.withColumn("active_avg_clicks", user_agg("all_click_cnt") * 1.0 / user_agg("active_days"))
 			.withColumn("dur", durUDF(col("time_list")))
 			.select(col("user_id"), col("dur").getItem(0).as("mean_dur"),
 				col("dur").getItem(1).as("max_dur"),
@@ -134,7 +137,7 @@ object FeatureProcess {
 		user_agg = user_agg.join(user_dur, usingColumn = "user_id")
 		// 最大点击特征统计
 		val max_feature_names = Array("product_id", "product_category", "advertiser_id", "industry")
-		for (name <- max_feature_names){
+		for (name <- max_feature_names) {
 			val user_max_click_sql =
 				s"""select b.user_id, b.$name as max_click_$name, b.cnt from (
 				   |    select user_id, $name, cnt, row_number() over (partition by user_id order by cnt desc) rank
@@ -148,13 +151,15 @@ object FeatureProcess {
 		// 窗口特征统计
 		val window_scope = Array(3, 5, 7, 15, 30)
 		
-		for (window <- window_scope){
-			val time_udf = udf((time:Int) => {math.floor((time-1)/window)})
-			var window_agg = full_click_data.withColumn("window_num_"+window.toString, time_udf(col("time")))
+		for (window <- window_scope) {
+			val time_udf = udf((time: Int) => {
+				math.floor((time - 1) / window)
+			})
+			var window_agg = full_click_data.withColumn("window_num_" + window.toString, time_udf(col("time")))
 			println("window_num=", window)
 			window_agg.show(false)
 			val feature_names = Array("creative_id", "ad_id", "product_id", "product_category", "advertiser_id", "industry")
-			for (feature_name <- feature_names){
+			for (feature_name <- feature_names) {
 			
 			}
 		}
@@ -195,28 +200,40 @@ object FeatureProcess {
 			StructField("creative_id", StringType), StructField("ad_id", StringType), StructField("product_id", StringType),
 			StructField("product_category", StringType), StructField("advertiser_id", StringType), StructField("industry", StringType)
 		))
-//		val train_ad_data = sparkSession.read.schema(schema).format("csv").option("header", "true")
-//			.load(dataPath + "/train_preliminary/ad.csv")
-//		println("train_ad_data count=", train_ad_data.count())  //2481136L
-//		train_ad_data.show(false)
-//
-//		val test_ad_data = sparkSession.read.schema(schema).format("csv").option("header", "true").load(dataPath + "/test/ad.csv")
-//		println("test_ad_data count=", test_ad_data.count())  //2618160L
-//		test_ad_data.show(false)
-//
-//		// creative_id, ad_id, product_id, product_category, advertiser_id, industry
-//		val all_ad_data = train_ad_data.union(test_ad_data).repartition(numPartitions)
-//			.na.fill(Map("ad_id" -> 4000000, "product_id" -> 60000, "product_category" -> 30,
-//			"advertiser_id" -> 63000, "industry" -> 400)).distinct()
+		//		val train_ad_data = sparkSession.read.schema(schema).format("csv").option("header", "true")
+		//			.load(dataPath + "/train_preliminary/ad.csv")
+		//		println("train_ad_data count=", train_ad_data.count())  //2481136L
+		//		train_ad_data.show(false)
+		//
+		//		val test_ad_data = sparkSession.read.schema(schema).format("csv").option("header", "true").load(dataPath + "/test/ad.csv")
+		//		println("test_ad_data count=", test_ad_data.count())  //2618160L
+		//		test_ad_data.show(false)
+		//
+		//		// creative_id, ad_id, product_id, product_category, advertiser_id, industry
+		//		val all_ad_data = train_ad_data.union(test_ad_data).repartition(numPartitions)
+		//			.na.fill(Map("ad_id" -> 4000000, "product_id" -> 60000, "product_category" -> 30,
+		//			"advertiser_id" -> 63000, "industry" -> 400)).distinct()
+		val value_map = Map("ad_id" -> "4000000", "product_id" -> "60000", "product_category" -> "30",
+			"advertiser_id" -> "63000", "industry" -> "400")
 		val all_ad_data = sparkSession.read.schema(schema).format("csv").option("header", true)
-					.load(dataPath + "/all_ad.csv").repartition(numPartitions)
-					.na.fill(Map("ad_id" -> "4000000", "product_id" -> "60000", "product_category" -> "30",
-						"advertiser_id" -> "63000", "industry" -> "400"))
+			.load(dataPath + "/all_ad.csv").repartition(numPartitions).rdd
+			.map(p => (p.getAs[String]("creative_id"), p.getAs[String]("ad_id"), p.getAs[String]("product_id"),
+				p.getAs[String]("product_category"), p.getAs[String]("advertiser_id"), p.getAs[String]("industry")))
+			.map(p => (p._1, if (p._2 == "\\N") "4000000" else p._2,
+				if (p._3 == "\\N") "60000" else p._3,
+				if (p._4 == "\\N") "30" else p._4,
+				if(p._5=="\\N") "63000" else p._5,
+				if(p._6=="\\N") "400" else p._6)).map(p => Row(p._1.toInt, p._2.toInt, p._3.toInt, p._4.toInt, p._5.toInt, p._6.toInt))
+		val new_schema = StructType(List(
+			StructField("creative_id", IntegerType), StructField("ad_id", IntegerType), StructField("product_id", IntegerType),
+			StructField("product_category", IntegerType), StructField("advertiser_id", IntegerType), StructField("industry", IntegerType)
+		))
+		val res = sparkSession.createDataFrame(all_ad_data, new_schema)
 		
 		println("all ad count=", all_ad_data.count()) // 3412772
 		println("all Ad data")
-		all_ad_data.show(false)
-		all_ad_data
+		res.show(false)
+		res
 	}
 	
 	def adTrainFeatureProcess(train_click_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, numPartitions: Int): Unit = {
