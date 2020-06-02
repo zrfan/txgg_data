@@ -49,23 +49,22 @@ object FeatureProcess {
 		user_feature.select("user_id", "age", "gender", "all_click_cnt", "active_days", "creative_cnt",
 			"ad_cnt", "product_cnt", "category_cnt", "advertiser_cnt", "industry_cnt")
 			.show(false)
-		val all_feature_cols = Array("all_click_cnt", "active_days", "creative_cnt", "ad_id_cnt", "product_id_cnt",
+		val all_feature_cols = Array("all_click_cnt", "active_days", "creative_cnt", "ad_cnt", "product_cnt",
 			"category_cnt", "advertiser_cnt", "industry_cnt")
-		def decreaseAge(arg:Int): Unit ={
-			(arg-1)*1.0
-		}
-		val all_train = user_feature.select("user_id", "age", "gender", "all_click_cnt", "active_days", "creative_cnt",
-			"ad_id_cnt", "product_id_cnt", "category_cnt", "advertiser_cnt", "industry_cnt")
+		
+		val all_train_data = user_feature.select("user_id", "age", "gender", "all_click_cnt", "active_days", "creative_cnt",
+			"ad_cnt", "product_cnt", "category_cnt", "advertiser_cnt", "industry_cnt")
 			.filter("age!=0 and gender!=0").withColumn("label", user_feature("age")*1.0-1.0)
 		
 		println("all_train data")
-		all_train.show(200, false)
+		all_train_data.show(200, false)
 		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("assembed_features")
 //		val labelIndexer = new StringIndexer().setInputCol("age").setOutputCol("age_reindex").fit(all_train)
 //		println("labels:", labelIndexer.labels.mkString(" ; "))
 //		val tmp = labelIndexer.transform(all_train)
 //		println("transform labelInderer")
 //		tmp.show(false)
+		val all_train = assembler.transform(all_train_data)
 		
 		val lightgbm = new LightGBMClassifier().setLabelCol("label").setFeaturesCol("assembed_features")
 			.setPredictionCol("predict_label").setProbabilityCol("probability")
