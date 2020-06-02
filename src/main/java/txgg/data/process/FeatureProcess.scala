@@ -126,7 +126,7 @@ object FeatureProcess {
 			   | collect_set(product_id) as product_set, collect_set(product_category) as category_set,
 			   | collect_set(advertiser_id) as advertiser_set, collect_set(industry) as industry_set
 			   | from (select * from txgg_temp order by time) as A group by user_id, age, gender """.stripMargin
-		val user_agg = sparkSession.sql(user_agg_sql)
+		var user_agg = sparkSession.sql(user_agg_sql)
 		println("user_agg info")
 		def getDuring(time_list: scala.collection.mutable.WrappedArray[Int]): Array[Float] ={
 			val dur_list = time_list.map(x => x.toFloat).sorted.sliding(2).map(x => x.last - x.head).toList
@@ -143,6 +143,7 @@ object FeatureProcess {
 				col("dur").getItem(2).as("min_dur"))
 		println("test mean dur")
 		test.show(false)
+		user_agg = user_agg.join(test, usingColumn = "user_id")
 		val max_feature_names = Array("product_id", "product_category", "advertiser_id", "industry")
 		for (name <- max_feature_names){
 			val user_max_click_sql =
@@ -153,10 +154,10 @@ object FeatureProcess {
 			val user_max_product = sparkSession.sql(user_max_click_sql)
 			println("user_max_click data")
 			user_max_product.show(false)
-//			val tmp =
+			user_agg = user_agg.join(user_max_product, usingColumn = "user_id")
 		}
 		
-		test
+		user_agg
 	}
 	
 	def readAllClickData(sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): Dataset[Row] = {
