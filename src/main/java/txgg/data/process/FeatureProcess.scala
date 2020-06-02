@@ -59,7 +59,7 @@ object FeatureProcess {
 		full_click_data.createTempView("txgg_temp")
 		val data_sql =
 			s"""select cast(A.user_id as string), cast(A.age as string), cast(A.gender as string),
-	            collect_list(concat_ws("#", cast(time as string), cast(creative_id as string), cast(ad_id as tring),
+	            collect_list(concat_ws("#", cast(time as string), cast(creative_id as string), cast(ad_id as string),
                     cast(product_id as string),  cast(product_category as string),
                     cast(advertiser_id as string), cast(industry as string), cast(click_times as string))) as seq
             from (select * from txgg_temp order by user_id,time) as A
