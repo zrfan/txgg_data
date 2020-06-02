@@ -52,14 +52,22 @@ object FeatureProcess {
 		val all_train = user_feature.select("user_id", "age", "gender", "all_click_cnt", "active_days", "creative_cnt",
 			"ad_id_cnt", "product_id_cnt", "category_cnt", "advertiser_cnt", "industry_cnt").filter("age!=0 and gender!=0")
 		
+		println("all_train data")
+		all_train.show(200, false)
 		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("assembed_features")
 		val labelIndexer = new StringIndexer().setInputCol("age").setOutputCol("age_reindex").fit(all_train)
-		val labelConverter = new IndexToString().setInputCol("predict_label").setOutputCol("predict_age").setLabels(labelIndexer.labels)
+		println("labels:", labelIndexer.labels.mkString(" ; "))
+		val tmp = labelIndexer.transform(all_train)
+		println("transform labelInderer")
+		tmp.show(false)
 		
 		val lightgbm = new LightGBMClassifier().setLabelCol("age_reindex").setFeaturesCol("assembed_features")
 			.setPredictionCol("predict_label").setProbabilityCol("probability")
-		val pipeline = new Pipeline().setStages(Array(labelIndexer, assembler, lightgbm, labelConverter))
+		val labelConverter = new IndexToString().setInputCol("predict_label").setOutputCol("predict_age").setLabels(labelIndexer.labels)
+		
 		val Array(train, test) = all_train.randomSplit(Array(0.7, 0.3), seed = 2020L)
+		val pipeline = new Pipeline().setStages(Array(labelIndexer, assembler, lightgbm, labelConverter))
+		
 		val model = pipeline.fit(train)
 		
 		val val_res = model.transform(test)
