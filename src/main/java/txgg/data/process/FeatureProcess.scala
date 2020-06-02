@@ -192,7 +192,7 @@ object FeatureProcess {
 		user_agg = user_agg.withColumn("active_avg_clicks", user_agg("all_click_cnt") * 1.0 / user_agg("active_days"))
 		
 		// 点击间隔统计
-		def getDuring(time_list: scala.collection.mutable.WrappedArray[Int]): Array[Float] = {
+		def getDuring(time_list: scala.collection.mutable.WrappedArray[Int]): Array[Double] = {
 			val dur_list = time_list.map(x => x.toFloat).sorted.sliding(2).map(x => x.last - x.head).toList
 			val mean_dur = dur_list.sum / dur_list.length
 			val max_dur = dur_list.max
