@@ -41,45 +41,45 @@ object FeatureProcess {
 		all_ad_data.show(50, false)
 		all_click_data.show(50, false)
 		
-		//		val full_click_data = all_click_data.join(all_ad_data, usingColumns = Seq("creative_id"), joinType = "left_outer")
-		//			.repartition(numPartitions)
-		//			.persist(StorageLevel.MEMORY_AND_DISK)
-		//		println("full click data after join")
-		//		full_click_data.show(50, false)
-		//
-		//
-		//		// 用户特征提取
-		//		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
-		//		println("user_feature")
-		//		user_feature.show(false)
-		//
-		//		val all_feature_cols = Array("all_click_cnt", "active_days", "creative_cnt", "ad_cnt", "product_cnt",
-		//			"category_cnt", "advertiser_cnt", "industry_cnt",
-		//			"mean_dur", "max_dur", "min_dur",
-		//			"max_click_product_id", "max_click_product_category", "max_click_advertiser_id", "max_click_industry")
-		//
-		//		val all_data = user_feature.select((all_feature_cols ++ Array("user_id", "age", "gender")).map(x => col(x)): _*)
-		//		println("all_data")
-		//		all_data.show(200, false)
-		//
-		//		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("features")
-		//		val all_assembled_data = assembler.transform(all_data)
-		//		println("assembled")
-		//		all_assembled_data.show(false)
-		//		val all_train = all_assembled_data.filter("age!=0 and gender!=0").withColumn("label", user_feature("gender")*1.0-1.0)
-		//
-		//		// train
-		//		val lightgbm = new LightGBMClassifier().setLabelCol("label").setFeaturesCol("features")
-		//			.setPredictionCol("predict_label").setProbabilityCol("probability")
-		//		val Array(train, test) = all_train.randomSplit(Array(0.7, 0.3), seed = 2020L)
-		//		val model = lightgbm.fit(train)
-		//
-		//		val val_res = model.transform(test)
-		//		println("val_res=", val_res)
-		//		val_res.show(false)
-		//		val evaluator = new BinaryClassificationEvaluator().setLabelCol("label").setRawPredictionCol("predict_label")
-		////		val evaluator = new MulticlassClassificationEvaluator().setLabelCol("label").setPredictionCol("predict_label")
-		//		println("evalutor=", evaluator.evaluate(val_res))
+		val full_click_data = all_click_data.join(all_ad_data, usingColumns = Seq("creative_id"), joinType = "left_outer")
+			.repartition(numPartitions)
+			.persist(StorageLevel.MEMORY_AND_DISK)
+		println("full click data after join")
+		full_click_data.show(50, false)
+		
+		
+		// 用户特征提取
+		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
+		println("user_feature")
+		user_feature.show(false)
+		
+		val all_feature_cols = Array("all_click_cnt", "active_days", "active_avg_clicks",
+			"creative_cnt", "ad_cnt", "product_cnt", "category_cnt", "advertiser_cnt", "industry_cnt",
+			"mean_dur", "max_dur", "min_dur",
+			"max_click_product_id", "max_click_product_category", "max_click_advertiser_id", "max_click_industry")
+		
+		val all_data = user_feature.select((all_feature_cols ++ Array("user_id", "age", "gender")).map(x => col(x)): _*)
+		println("all_data")
+		all_data.show(200, false)
+		
+		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("features")
+		val all_assembled_data = assembler.transform(all_data)
+		println("assembled")
+		all_assembled_data.show(false)
+		val all_train = all_assembled_data.filter("age!=0 and gender!=0").withColumn("label", user_feature("gender") * 1.0 - 1.0)
+		
+		// train
+		val lightgbm = new LightGBMClassifier().setLabelCol("label").setFeaturesCol("features")
+			.setPredictionCol("predict_label").setProbabilityCol("probability")
+		val Array(train, test) = all_train.randomSplit(Array(0.7, 0.3), seed = 2020L)
+		val model = lightgbm.fit(train)
+		
+		val val_res = model.transform(test)
+		println("val_res=", val_res)
+		val_res.show(false)
+		val evaluator = new BinaryClassificationEvaluator().setLabelCol("label").setRawPredictionCol("predict_label")
+		//		val evaluator = new MulticlassClassificationEvaluator().setLabelCol("label").setPredictionCol("predict_label")
+		println("evalutor=", evaluator.evaluate(val_res))
 		
 		
 		//predict
@@ -114,6 +114,7 @@ object FeatureProcess {
 			   | from (select * from txgg_temp order by time) as A group by user_id, age, gender """.stripMargin
 		var user_agg = sparkSession.sql(user_agg_sql)
 		println("user_agg info")
+		user_agg = user_agg.withColumn("active_avg_clicks", user_agg("all_click_cnt") * 1.0 / user_agg("active_days"))
 		
 		// 点击间隔统计
 		def getDuring(time_list: scala.collection.mutable.WrappedArray[Int]): Array[Float] = {
@@ -127,7 +128,7 @@ object FeatureProcess {
 		val durUDF = udf((time_list: scala.collection.mutable.WrappedArray[Int]) => {
 			getDuring(time_list)
 		})
-		val user_dur = user_agg.withColumn("active_avg_clicks", user_agg("all_click_cnt") * 1.0 / user_agg("active_days"))
+		val user_dur = user_agg
 			.withColumn("dur", durUDF(col("time_list")))
 			.select(col("user_id"), col("dur").getItem(0).as("mean_dur"),
 				col("dur").getItem(1).as("max_dur"),
@@ -222,8 +223,8 @@ object FeatureProcess {
 			.map(p => (p._1, if (p._2 == "\\N") "4000000" else p._2,
 				if (p._3 == "\\N") "60000" else p._3,
 				if (p._4 == "\\N") "30" else p._4,
-				if(p._5=="\\N") "63000" else p._5,
-				if(p._6=="\\N") "400" else p._6)).map(p => Row(p._1.toInt, p._2.toInt, p._3.toInt, p._4.toInt, p._5.toInt, p._6.toInt))
+				if (p._5 == "\\N") "63000" else p._5,
+				if (p._6 == "\\N") "400" else p._6)).map(p => Row(p._1.toInt, p._2.toInt, p._3.toInt, p._4.toInt, p._5.toInt, p._6.toInt))
 		val new_schema = StructType(List(
 			StructField("creative_id", IntegerType), StructField("ad_id", IntegerType), StructField("product_id", IntegerType),
 			StructField("product_category", IntegerType), StructField("advertiser_id", IntegerType), StructField("industry", IntegerType)
