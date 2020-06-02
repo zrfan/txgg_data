@@ -1,7 +1,7 @@
 #!/bin/sh
 # sh material.sh 20200204  >> push.log 2>&1 &
 
-base_func="new_user_list"  #
+base_func="newuserlist"  #
 
 echo "get params: $*"
 
@@ -21,7 +21,7 @@ mvn package
 tf_jar_path="--jars /home/fzr/env/spark-tensorflow-connector_2.11-1.10.0.jar"
 #
 spark-submit --name "txgg-data-preprocess" \
-    --driver-memory 10g \
+    --driver-memory 15g \
     --jars "/home/fzr/env/spark-tensorflow-connector_2.11-1.10.0.jar" \
     --class txgg.data.process.FeatureProcess \
     ./target/txgg_data-1.0-SNAPSHOT-jar-with-dependencies.jar $funcname > txgg.log 2>&1 &
