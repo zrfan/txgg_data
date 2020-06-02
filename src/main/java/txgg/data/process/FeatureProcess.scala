@@ -192,8 +192,8 @@ object FeatureProcess {
 	
 	def readAllAdData(sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): sql.DataFrame = {
 		val schema = StructType(List(
-			StructField("creative_id", IntegerType), StructField("ad_id", IntegerType), StructField("product_id", IntegerType),
-			StructField("product_category", IntegerType), StructField("advertiser_id", IntegerType), StructField("industry", IntegerType)
+			StructField("creative_id", StringType), StructField("ad_id", StringType), StructField("product_id", StringType),
+			StructField("product_category", StringType), StructField("advertiser_id", StringType), StructField("industry", StringType)
 		))
 //		val train_ad_data = sparkSession.read.schema(schema).format("csv").option("header", "true")
 //			.load(dataPath + "/train_preliminary/ad.csv")
@@ -208,10 +208,10 @@ object FeatureProcess {
 //		val all_ad_data = train_ad_data.union(test_ad_data).repartition(numPartitions)
 //			.na.fill(Map("ad_id" -> 4000000, "product_id" -> 60000, "product_category" -> 30,
 //			"advertiser_id" -> 63000, "industry" -> 400)).distinct()
-		val all_ad_data = sparkSession.read.schema(schema).format("csv").option("header", "true")
+		val all_ad_data = sparkSession.read.schema(schema).format("csv").option("header", true)
 					.load(dataPath + "/all_ad.csv").repartition(numPartitions)
-					.na.fill(Map("ad_id" -> 4000000, "product_id" -> 60000, "product_category" -> 30,
-						"advertiser_id" -> 63000, "industry" -> 400))
+					.na.fill(Map("ad_id" -> "4000000", "product_id" -> "60000", "product_category" -> "30",
+						"advertiser_id" -> "63000", "industry" -> "400"))
 		
 		println("all ad count=", all_ad_data.count()) // 3412772
 		println("all Ad data")
