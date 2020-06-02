@@ -24,7 +24,7 @@ object FeatureProcess {
 		val sparkContext = sparkSession.sparkContext
 		val sparkConf = sparkContext.getConf
 		val sqlContext = new SQLContext(sparkContext)
-		val numPartitions = 460
+		val numPartitions = 260
 		val dataPath = "/home/fzr/txgg/data/origin/"
 		val savePath = "/home/fzr/txgg/data/processed/"
 		println("dataPath=", dataPath)
@@ -58,23 +58,25 @@ object FeatureProcess {
 		
 		println("all_train data")
 		all_train_data.show(200, false)
-		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("assembed_features")
+		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("assembled_features")
 //		val labelIndexer = new StringIndexer().setInputCol("age").setOutputCol("age_reindex").fit(all_train)
 //		println("labels:", labelIndexer.labels.mkString(" ; "))
 //		val tmp = labelIndexer.transform(all_train)
 //		println("transform labelInderer")
 //		tmp.show(false)
 		val all_train = assembler.transform(all_train_data)
+		println("assembled")
+		all_train.show(false)
 		
-		val lightgbm = new LightGBMClassifier().setLabelCol("label").setFeaturesCol("assembed_features")
+		val lightgbm = new LightGBMClassifier().setLabelCol("label").setFeaturesCol("assembled_features")
 			.setPredictionCol("predict_label").setProbabilityCol("probability")
 //		val labelConverter = new IndexToString().setInputCol("predict_label").setOutputCol("predict_age")
 //			.setLabels(Array("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"))
 		
 		val Array(train, test) = all_train.randomSplit(Array(0.7, 0.3), seed = 2020L)
-		val pipeline = new Pipeline().setStages(Array(assembler, lightgbm))
+//		val pipeline = new Pipeline().setStages(Array(assembler, lightgbm))
 		
-		val model = pipeline.fit(train)
+		val model = lightgbm.fit(train)
 		
 		val val_res = model.transform(test)
 		println("val_res=", val_res)
@@ -139,7 +141,7 @@ object FeatureProcess {
 //		user_agg.show(false)
 		println("user feature info")
 //		user_info.show(false)
-		user_info
+		user_agg
 	}
 	
 	def readAllClickData(sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): Dataset[Row] = {
