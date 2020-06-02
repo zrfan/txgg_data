@@ -41,7 +41,8 @@ object FeatureProcess {
 		all_ad_data.show(50, false)
 		all_click_data.show(50, false)
 		
-		val full_click_data = all_click_data.join(all_ad_data, usingColumn = "creative_id").repartition(numPartitions)
+		val full_click_data = all_click_data.join(all_ad_data, usingColumns = Seq("creative_id"), joinType = "left_outer")
+			.repartition(numPartitions)
 			.persist(StorageLevel.MEMORY_AND_DISK)
 		println("full click data after join")
 		full_click_data.show(50, false)
@@ -143,8 +144,10 @@ object FeatureProcess {
 		}
 		// 窗口特征统计
 		val window_scope = Array(3, 5, 7, 15, 30)
+		
 		for (window <- window_scope){
-			var window_agg = full_click_data.withColumn("window_num_"+window.toString, full_click_data("time")/window)
+			val time_udf = udf((time:Int) => {math.floor((time-1)/window)})
+			var window_agg = full_click_data.withColumn("window_num_"+window.toString, time_udf(col("time")))
 			println("window_num=", window)
 			window_agg.show(false)
 			val feature_names = Array("creative_id", "ad_id", "product_id", "product_category", "advertiser_id", "industry")
@@ -205,7 +208,7 @@ object FeatureProcess {
 		val all_ad_data = sparkSession.read.schema(schema).format("csv").option("header", "true")
 					.load(dataPath + "/all_ad.csv").repartition(numPartitions)
 					.na.fill(Map("ad_id" -> 4000000, "product_id" -> 60000, "product_category" -> 30,
-						"advertiser_id" -> 63000, "industry" -> 400)).distinct()
+						"advertiser_id" -> 63000, "industry" -> 400))
 		
 		println("all ad count=", all_ad_data.count()) // 3412772
 		println("all Ad data")
