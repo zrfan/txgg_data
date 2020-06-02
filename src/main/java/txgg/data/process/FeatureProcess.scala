@@ -147,7 +147,7 @@ object FeatureProcess {
 		for (name <- max_feature_names){
 			val user_max_click_sql =
 				s"""select a.user_id, a.$name, a.cnt from (
-				   | select user_id, $name, sum(click_times) as cnt,
+				   | select user_id, $name, sum(click_times) cnt,
 				   |  row_number() over (partition by $name order by cnt desc) rank
 				   | from txgg_temp group by user_id, $name ) a where a.rank=1""".stripMargin
 			val user_max_product = sparkSession.sql(user_max_click_sql)
