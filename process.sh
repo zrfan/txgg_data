@@ -15,6 +15,7 @@ fi
 
 echo "funcname=$funcname"
 
+rm -r target
 mvn package
 
 tf_jar_path="--jars /home/fzr/env/spark-tensorflow-connector_2.11-1.10.0.jar"
