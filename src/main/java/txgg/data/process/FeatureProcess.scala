@@ -3,7 +3,7 @@ package txgg.data.process
 import com.microsoft.ml.spark.lightgbm.LightGBMClassifier
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
-import org.apache.spark.ml.feature.VectorAssembler
+import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql
 import org.apache.spark.sql.functions.{count, lit, sum}
@@ -44,21 +44,27 @@ object FeatureProcess {
 		// 用户特征提取
 		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
 		println("user_feature")
-		user_feature.show(false)
-		val all_train = user_feature.filter("age!=0 and gender!=0")
+		user_feature.select("user_id", "age", "gender", "all_click_cnt", "active_days", "creative_cnt",
+			"ad_id_cnt", "product_id_cnt", "category_cnt", "advertiser_cnt", "industry_cnt")
+			.show(false)
 		val all_feature_cols = Array("all_click_cnt", "active_days", "creative_cnt", "ad_id_cnt", "product_id_cnt",
 			"category_cnt", "advertiser_cnt", "industry_cnt")
-		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("assembed_features")
+		val all_train = user_feature.select("user_id", "age", "gender", "all_click_cnt", "active_days", "creative_cnt",
+			"ad_id_cnt", "product_id_cnt", "category_cnt", "advertiser_cnt", "industry_cnt").filter("age!=0 and gender!=0")
 		
-		val lightgbm = new LightGBMClassifier().setLabelCol("age").setFeaturesCol("assembed_features")
-			.setPredictionCol("predict").setProbabilityCol("probability")
-		val pipeline = new Pipeline().setStages(Array(assembler, lightgbm))
+		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("assembed_features")
+		val labelIndexer = new StringIndexer().setInputCol("age").setOutputCol("age_reindex").fit(all_train)
+		val labelConverter = new IndexToString().setInputCol("predict_label").setOutputCol("predict_age").setLabels(labelIndexer.labels)
+		
+		val lightgbm = new LightGBMClassifier().setLabelCol("age_reindex").setFeaturesCol("assembed_features")
+			.setPredictionCol("predict_label").setProbabilityCol("probability")
+		val pipeline = new Pipeline().setStages(Array(labelIndexer, assembler, lightgbm, labelConverter))
 		val Array(train, test) = all_train.randomSplit(Array(0.7, 0.3), seed = 2020L)
 		val model = pipeline.fit(train)
 		
 		val val_res = model.transform(test)
 		println("val_res=", val_res)
-		val evaluator = new MulticlassClassificationEvaluator().setLabelCol("age").setPredictionCol("predict")
+		val evaluator = new MulticlassClassificationEvaluator().setLabelCol("age").setPredictionCol("predict_label")
 		println("evalutor=", evaluator.evaluate(val_res))
 		
 		val predict = user_feature.filter("age=0 and gender=0")
@@ -115,9 +121,9 @@ object FeatureProcess {
 			mean_dur
 		}
 //		val test = user_agg.withColumn("mean_dur", getDuring(col("time_list")))
-		user_agg.show(false)
+//		user_agg.show(false)
 		println("user feature info")
-		user_info.show(false)
+//		user_info.show(false)
 		user_info
 	}
 	
