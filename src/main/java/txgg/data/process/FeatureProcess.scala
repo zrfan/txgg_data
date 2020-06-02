@@ -1,5 +1,9 @@
 package txgg.data.process
 
+import com.microsoft.ml.spark.lightgbm.LightGBMClassifier
+import org.apache.spark.ml.Pipeline
+import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
+import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql
 import org.apache.spark.sql.functions.{count, lit, sum}
@@ -39,10 +43,27 @@ object FeatureProcess {
 		
 		// 用户特征提取
 		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
+		println("user_feature")
+		user_feature.show(false)
+		val all_train = user_feature.filter("age!=0 and gender!=0")
+		val all_feature_cols = Array("click_times", "active_days", "creative_cnt", "ad_id_cnt", "product_id_cnt",
+			"category_cnt", "advertiser_cnt", "industry_cnt")
+		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("features")
+		
+		val lightgbm = new LightGBMClassifier().setLabelCol("age").setFeaturesCol("features")
+			.setPredictionCol("predict").setProbabilityCol("probability")
+		val pipeline = new Pipeline().setStages(Array(assembler, lightgbm))
+		val Array(train, test) = all_train.randomSplit(Array(0.7, 0.3), seed = 2020L)
+		val model = pipeline.fit(train)
+		
+		val val_res = model.transform(test)
+		println("val_res=", val_res)
+		val evaluator = new MulticlassClassificationEvaluator().setLabelCol("age").setPredictionCol("predict")
+		println("evalutor=", evaluator.evaluate(val_res))
 		
 		// 广告特征提取: 目标编码
-		val ad_train_feature = adTrainFeatureProcess(full_click_data.filter("age !=0 and gender != 0"),
-			sparkSession, dataPath, numPartitions)
+//		val ad_train_feature = adTrainFeatureProcess(full_click_data.filter("age !=0 and gender != 0"),
+//			sparkSession, dataPath, numPartitions)
 		
 		// 保存TFRecords文件
 		
@@ -59,26 +80,26 @@ object FeatureProcess {
 	}
 	
 	def userFeatureProcess(full_click_data: Dataset[Row], sparkSession: SparkSession, savePath: String, numPartitions: Int): Dataset[Row] = {
-		val user_grouped = full_click_data.groupBy("user_id")
+		val user_grouped = full_click_data.groupBy("user_id", "age", "gender")
 		// 全部用户的平均点击数：35.679
 		val user_info = user_grouped.agg(sum("click_times").as("all_click_cnt"),
 			count("time").as("active_days"),
 			count("creative_id").as("creative_cnt"),
 			count("ad_id").as("ad_id_cnt"),
 			count("product_id").as("product_id_cnt"),
-			count("product_category").as("pro_category_cnt"),
+			count("product_category").as("category_cnt"),
 			count("advertiser_id").as("advertiser_cnt"),
 			count("industry").as("industry_cnt"))
 		full_click_data.createTempView("txgg_temp")
 		val user_agg_sql =
-			s"""select user_id, count(distinct time) as active_days, count(distinct creative_id) as creative_cnt,
+			s"""select user_id, age, gender, count(distinct time) as active_days, count(distinct creative_id) as creative_cnt,
 			   | count(distinct ad_id) as ad_cnt, count(distinct product_id) as product_cnt,
-			   | count(distinct product_category) as pro_category_cnt, count(distinct advertiser_id) as advertiser_cnt,
+			   | count(distinct product_category) as category_cnt, count(distinct advertiser_id) as advertiser_cnt,
 			   | count(distinct industry) as industry_cnt,
 			   | collect_list(time) as time_list, collect_list(creative_id) as creat_list, collect_list(ad_id) as ad_list,
-			   | collect_set(product_id) as product_set, collect_set(product_category) as product_category_set,
+			   | collect_set(product_id) as product_set, collect_set(product_category) as category_set,
 			   | collect_set(advertiser_id) as advertiser_set, collect_set(industry) as industry_set
-			   |  from (select * from txgg_temp order by time) as A group by user_id """.stripMargin
+			   |  from (select * from txgg_temp order by time) as A group by user_id, age, gender """.stripMargin
 		val user_agg = sparkSession.sql(user_agg_sql)
 		println("user_agg info")
 		user_agg.show(false)
@@ -112,9 +133,10 @@ object FeatureProcess {
 		
 		val test_ad_data = sparkSession.read.schema(schema).format("csv").option("header", "true").load(dataPath + "/test/ad.csv")
 		
+		// creative_id, ad_id, product_id, product_category, advertiser_id, industry
 		val all_ad_data = train_ad_data.union(test_ad_data).repartition(numPartitions)
 			.distinct().na.fill(Map("ad_id" -> 4000000, "product_id" -> 60000, "product_category" -> 30,
-			"advertiser_id" -> 63000, "industry" -> 400)) // creative_id, ad_id, product_id, product_category, advertiser_id, industry
+			"advertiser_id" -> 63000, "industry" -> 400))
 		
 		
 		println("all ad count=", all_ad_data.count()) // 3412773
@@ -127,7 +149,7 @@ object FeatureProcess {
 	
 	def adTrainFeatureProcess(train_click_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, numPartitions: Int): Unit = {
 		
-		println("origin_data describe")
+		println("train click data describe")
 		train_click_data.describe().show(false)
 		//		println("describe")
 		// 全部用户的平均点击数：35.679
@@ -179,9 +201,9 @@ object FeatureProcess {
 			for (target_feature <- target_features) {
 				for (target_val <- target_vals) {
 					val tmp = other.select(feature_name, target_feature, target_val, "user_id", "time").persist(StorageLevel.MEMORY_AND_DISK)
-					println("feature_name=", feature_name, "    target=", target_feature, "    Target_val=", target_val, "   count=", tmp.count())
+					println("feature_name=", feature_name, "    target=", target_feature, "    Target_val=", target_val, "   data count=", tmp.count())
 					tmp.show(false)
-					// feature_name 的点击总和
+					// feature_name 的点击数总和
 					val emperical_df = tmp.groupBy(feature_name).agg(sum(target_val).as(feature_name + "_" + target_val + "_sum"),
 						count("user_id").as(feature_name + "_" + "user_id" + "_count"))
 						.orderBy(feature_name)
