@@ -53,7 +53,7 @@ object FeatureProcess {
 			"mean_dur", "max_dur", "min_dur",
 			"max_click_product_id", "max_click_product_category", "max_click_advertiser_id", "max_click_industry")
 		
-		val all_data = user_feature.select(all_feature_cols.map(x => col(x)): _*)
+		val all_data = user_feature.select((all_feature_cols ++ Array("user_id", "age", "gender")).map(x => col(x)): _*)
 		println("all_data")
 		all_data.show(200, false)
 		
