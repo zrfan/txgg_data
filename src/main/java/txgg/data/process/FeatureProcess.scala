@@ -2,7 +2,7 @@ package txgg.data.process
 
 import com.microsoft.ml.spark.lightgbm.LightGBMClassifier
 import org.apache.spark.ml.Pipeline
-import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
+import org.apache.spark.ml.evaluation.{BinaryClassificationEvaluator, MulticlassClassificationEvaluator}
 import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql
@@ -66,7 +66,7 @@ object FeatureProcess {
 //		tmp.show(false)
 		val all_train = all_assembled_data.filter("age!=0 and gender!=0").withColumn("label", user_feature("gender")*1.0-1.0)
 		
-		
+		// train
 		val lightgbm = new LightGBMClassifier().setLabelCol("label").setFeaturesCol("assembled_features")
 			.setPredictionCol("predict_label").setProbabilityCol("probability")
 //		val labelConverter = new IndexToString().setInputCol("predict_label").setOutputCol("predict_age")
@@ -79,10 +79,12 @@ object FeatureProcess {
 		
 		val val_res = model.transform(test)
 		println("val_res=", val_res)
-		val evaluator = new MulticlassClassificationEvaluator().setLabelCol("label").setPredictionCol("predict_label")
+		val_res.show(false)
+		val evaluator = new BinaryClassificationEvaluator().setLabelCol("label").setRawPredictionCol("predict_label")
+//		val evaluator = new MulticlassClassificationEvaluator().setLabelCol("label").setPredictionCol("predict_label")
 		println("evalutor=", evaluator.evaluate(val_res))
-		
-		val predict = user_feature.filter("age=0 and gender=0")
+		//predict
+		val predict = all_assembled_data.filter("age=0 and gender=0")
 		println("predict data=")
 		predict.show(false)
 		val predict_res = model.transform(predict)
@@ -145,7 +147,7 @@ object FeatureProcess {
 	
 	def readAllClickData(sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): Dataset[Row] = {
 		val click_schema = StructType(List(
-			StructField("user_id", IntegerType), StructField("time", IntegerType), StructField("creative_id", IntegerType),
+			StructField("time", IntegerType), StructField("user_id", IntegerType), StructField("creative_id", IntegerType),
 			StructField("click_times", IntegerType)
 		))
 		val train_click_data = sparkSession.read.schema(click_schema).format("csv").option("header", "true")
