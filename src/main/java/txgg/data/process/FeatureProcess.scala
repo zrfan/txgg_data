@@ -6,12 +6,13 @@ import org.apache.spark.ml.evaluation.{BinaryClassificationEvaluator, Multiclass
 import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql
-import org.apache.spark.sql.functions.{col, count, lit, sum, udf}
-import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
+import org.apache.spark.sql.functions.{approx_count_distinct, col, count, lit, sum, udf}
+import org.apache.spark.sql.types.{ArrayType, IntegerType, StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.util.StatCounter
 
+import scala.collection.mutable
 import scala.reflect.internal.util.TableDef.Column
 
 object FeatureProcess {
@@ -45,10 +46,84 @@ object FeatureProcess {
 		val full_click_data = all_click_data.join(all_ad_data, usingColumns = Seq("creative_id"), joinType = "left_outer")
 			.repartition(numPartitions)
 			.persist(StorageLevel.MEMORY_AND_DISK)
+		all_click_data.unpersist()
 		println("full click data after join")
 		full_click_data.show(50, false)
+		if (func_name == "newuserlist"){
+			newUserList(full_click_data, sparkSession, numPartitions, savePath)
+		}else if (func_name == "featuretest"){
+			featureTest(full_click_data, sparkSession, dataPath, savePath, numPartitions)
+		}
+	}
+	def newUserList(full_click_data: Dataset[Row], sparkSession: SparkSession, numPartitions: Int, savePath: String): Unit ={
+		full_click_data.createTempView("txgg_temp")
+		val data_sql =
+			s"""select A.user_id, A.age, A.gender, collect_list(concat_ws("#", cast(time as string), creative_id, ad_id,
+                    product_id,  product_category, advertiser_id, industry, cast(click_times as string))) as seq
+            from (select * from txgg_temp order by user_id,time) as A
+            group by A.user_id,A.age,A.gender""".stripMargin
+		def getUserSeq(list: Array[String]): Array[String] ={
+			// time, creative_id, ad_id, product_id, product_category, advertiser_id, industry, click_times
+			val time_ad_list = list.map(x => x.split("#"))
+			var res:Array[String] = Array[String]()
+			for (i <- Array.range(1, 7)){
+				var interest_list: Array[String] = null
+				if (i<3){  // creative_id, ad_id
+					interest_list = time_ad_list.map(x => (x(i) + "#" + x(7)))
+				}else{
+					val interest = time_ad_list.map(x => (x(i), x(7).toInt)).groupBy(_._1).mapValues(seq => seq.reduce { (x, y) => (x._1, x._2 + y._2) })
+					interest_list = interest.mapValues(seq => seq._1+"#"+seq._2.toString).values.toArray
+				}
+				val cnt = interest_list.length
+				// 第一位是seq长度，之后是id+'#'+点击次数
+				val str = cnt.toString + ";" + interest_list.mkString(";")
+				res = res :+ str
+			}
+			res
+		}
+		val data = sparkSession.sql(data_sql).rdd.repartition(numPartitions)
+			.map(p => (p(0).asInstanceOf[String], p(1).asInstanceOf[String], p(2).asInstanceOf[String],
+				p(3).asInstanceOf[mutable.WrappedArray[String]].toArray))
+			.map(p => (p._1, p._2, p._3, getUserSeq(p._4)))
+			.map(p => (p._1, p._2, p._3, p._4))
+			.persist(StorageLevel.MEMORY_AND_DISK)
+		val schema = StructType(List(
+			StructField("user_id_label", ArrayType(StringType)), StructField("ad_seq", ArrayType(StringType))
+		))
+		/////	  predict 先写出内存
+		val predict_ad_data = data.filter(p => (p._2.toInt == 0 && p._3.toInt == 0))
+			.map(p => Row(Array(p._1, p._2, p._3), p._4)) // user_id&label, ad_seq
+		val predict_ad_df = sparkSession.createDataFrame(predict_ad_data, schema)
+		println("predict result")
+		predict_ad_df.show(20, false)
+		println("predict count=", predict_ad_df.count())
+		predict_ad_df.repartition(2).write.format("tfrecords").option("recordType", "Example")
+			.mode("overwrite").save(savePath + s"/txpredict.tfrecords")
 		
-		
+		val all_train_data = data.filter(p => (p._2.toInt > 0 && p._3.toInt > 0))
+			.map(p => Row(Array(p._1, p._2, p._3), p._4)).persist(StorageLevel.MEMORY_AND_DISK) // user_id&label, ad_seq
+		val all_train_df = sparkSession.createDataFrame(all_train_data, schema)
+		val splits = all_train_df.randomSplit(Array(0.2, 0.2, 0.2, 0.2, 0.2), seed = 2020L)
+		data.unpersist()
+		for (k <- Array.range(0, splits.length)){
+			//			splits(k) = splits(k).withColumn("fold", lit(k))
+			println("process_split=", k, "test count=", splits(k).count())
+			splits(k).show(false)
+			splits(k).repartition(1).write.format("tfrecords").option("recordType", "Example")
+				.mode("overwrite").save(savePath + s"/" +  k.toString +"_fold/txtest.tfrecords")
+			var train:Dataset[Row] = null
+			for (j <- Array.range(0, splits.length)){
+				if (j != k){
+					train = if (train == null) splits(j)  else train.union(splits(j))
+				}
+			}
+			println("train count=", train.count())
+			train.show(false)
+			train.repartition(1).write.format("tfrecords").option("recordType", "Example")
+				.mode("overwrite").save(savePath + s"/" +  k.toString +"_fold/txtrain.tfrecords")
+		}
+	}
+	def featureTest(full_click_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): Unit ={
 		// 用户特征提取
 		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
 		println("user_feature")
@@ -157,8 +232,8 @@ object FeatureProcess {
 				   |    from ( select user_id, $name, sum(click_times) as cnt from txgg_temp group by user_id, $name) a
 				   |  ) b where b.rank=1""".stripMargin
 			val user_max_product = sparkSession.sql(user_max_click_sql)
-			println("user_max_click data")
-			user_max_product.show(false)
+//			println("user_max_click data")
+//			user_max_product.show(false)
 			user_agg = user_agg.join(user_max_product, usingColumn = "user_id")
 		}
 		// 窗口特征统计
@@ -168,14 +243,15 @@ object FeatureProcess {
 			val time_udf = udf((time: Int) => {
 				math.floor((time - 1) / window)
 			})
-			
 			var window_df = full_click_data.withColumn("window_num_" + window.toString, time_udf(col("time")))
 			println("window_num=", window)
 			window_df.show(false)
 			val feature_names = Array("creative_id", "ad_id", "product_id", "product_category", "advertiser_id", "industry")
 			for (feature_name <- feature_names) {
 				val window_agg = window_df.groupBy("user_id", "window_num_" + window.toString)
-				val res = window_agg.agg(sum("click_times"), )
+				val res = window_agg.agg(sum("click_times"), approx_count_distinct(feature_name))
+				println("window_agg=", feature_name, " window_num="+window.toString)
+				res.show(20, false)
 			}
 		}
 		
