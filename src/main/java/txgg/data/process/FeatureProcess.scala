@@ -24,7 +24,7 @@ object FeatureProcess {
 		val sparkContext = sparkSession.sparkContext
 		val sparkConf = sparkContext.getConf
 		val sqlContext = new SQLContext(sparkContext)
-		val numPartitions = 260
+		val numPartitions = 360
 		val dataPath = "/home/fzr/txgg/data/origin/"
 		val savePath = "/home/fzr/txgg/data/processed/"
 		println("dataPath=", dataPath)
@@ -46,12 +46,14 @@ object FeatureProcess {
 		// 用户特征提取
 		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
 		println("user_feature")
+		user_feature.show(false)
 		
 		val all_feature_cols = Array("all_click_cnt", "active_days", "creative_cnt", "ad_cnt", "product_cnt",
-			"category_cnt", "advertiser_cnt", "industry_cnt", "mean_dur")
+			"category_cnt", "advertiser_cnt", "industry_cnt",
+			"mean_dur", "max_dur", "min_dur",
+			"max_click_product_id", "max_click_product_category", "max_click_advertiser_id", "max_click_industry")
 		
-		val all_data = user_feature.select("user_id", "age", "gender", "all_click_cnt", "active_days", "creative_cnt",
-			"ad_cnt", "product_cnt", "category_cnt", "advertiser_cnt", "industry_cnt", "mean_dur")
+		val all_data = user_feature.select(all_feature_cols.map(x => col(x)): _*)
 		println("all_data")
 		all_data.show(200, false)
 		
@@ -78,43 +80,24 @@ object FeatureProcess {
 //		val evaluator = new MulticlassClassificationEvaluator().setLabelCol("label").setPredictionCol("predict_label")
 		println("evalutor=", evaluator.evaluate(val_res))
 		//predict
-		val predict = all_assembled_data.filter("age=0 and gender=0")
-		println("predict data=")
-		predict.show(false)
-		println("predict_data count=", predict.count())
-		val predict_res = model.transform(predict)
-		println("predict_res=")
-		predict_res.show(false)
+//		val predict = all_assembled_data.filter("age=0 and gender=0")
+//		println("predict data=")
+//		predict.show(false)
+//		println("predict_data count=", predict.count())
+//		val predict_res = model.transform(predict)
+//		println("predict_res=")
+//		predict_res.show(false)
 		
 		// 广告特征提取: 目标编码
 //		val ad_train_feature = adTrainFeatureProcess(full_click_data.filter("age !=0 and gender != 0"),
 //			sparkSession, dataPath, numPartitions)
 		
 		// 保存TFRecords文件
-		
-		
-		if (func_name == "new_user_list") {
-			//			userFeatureProcess(sparkSession, dataPath, numPartitions)
-		} else if (func_name == "adfeature") {
-			//			adFeatureProcess(sparkSession, dataPath, numPartitions)
-		}
-		else {
-			println("please enter a funcname: userfeature / sequence_uid_ad / makegraph / ad_list")
-		}
-		
 	}
 	
 	def userFeatureProcess(full_click_data: Dataset[Row], sparkSession: SparkSession, savePath: String, numPartitions: Int): Dataset[Row] = {
 		val user_grouped = full_click_data.groupBy("user_id", "age", "gender")
 		// 全部用户的平均点击数：35.679
-		val user_info = user_grouped.agg(sum("click_times").as("all_click_cnt"),
-			count("time").as("active_days"),
-			count("creative_id").as("creative_cnt"),
-			count("ad_id").as("ad_cnt"),
-			count("product_id").as("product_cnt"),
-			count("product_category").as("category_cnt"),
-			count("advertiser_id").as("advertiser_cnt"),
-			count("industry").as("industry_cnt"))
 		full_click_data.createTempView("txgg_temp")
 		val user_agg_sql =
 			s"""select user_id, age, gender, sum(click_times) as all_click_cnt, count(distinct time) as active_days,
@@ -128,6 +111,7 @@ object FeatureProcess {
 			   | from (select * from txgg_temp order by time) as A group by user_id, age, gender """.stripMargin
 		var user_agg = sparkSession.sql(user_agg_sql)
 		println("user_agg info")
+		//
 		def getDuring(time_list: scala.collection.mutable.WrappedArray[Int]): Array[Float] ={
 			val dur_list = time_list.map(x => x.toFloat).sorted.sliding(2).map(x => x.last - x.head).toList
 			val mean_dur = dur_list.sum/dur_list.length
@@ -136,18 +120,19 @@ object FeatureProcess {
 			Array(mean_dur, max_dur, min_dur)
 		}
 		val durUDF = udf((time_list:scala.collection.mutable.WrappedArray[Int]) => {getDuring(time_list)})
-		val test = user_agg.withColumn("active_avg_clicks", user_agg("all_click_cnt")*1.0/user_agg("active_days"))
+		val user_dur = user_agg.withColumn("active_avg_clicks", user_agg("all_click_cnt")*1.0/user_agg("active_days"))
 			.withColumn("dur", durUDF(col("time_list")))
 			.select(col("user_id"), col("dur").getItem(0).as("mean_dur"),
 				col("dur").getItem(1).as("max_dur"),
 				col("dur").getItem(2).as("min_dur"))
 		println("test mean dur")
-		test.show(false)
-		user_agg = user_agg.join(test, usingColumn = "user_id")
+		user_dur.show(false)
+		user_agg = user_agg.join(user_dur, usingColumn = "user_id")
+		// 最大点击特征统计
 		val max_feature_names = Array("product_id", "product_category", "advertiser_id", "industry")
 		for (name <- max_feature_names){
 			val user_max_click_sql =
-				s"""select b.user_id, b.$name, b.cnt from (
+				s"""select b.user_id, b.$name as max_click_$name, b.cnt from (
 				   |    select user_id, $name, cnt, row_number() over (partition by user_id order by cnt desc) rank
 				   |    from ( select user_id, $name, sum(click_times) as cnt from txgg_temp group by user_id, $name) a
 				   |  ) b where b.rank=1""".stripMargin
@@ -155,6 +140,13 @@ object FeatureProcess {
 			println("user_max_click data")
 			user_max_product.show(false)
 			user_agg = user_agg.join(user_max_product, usingColumn = "user_id")
+		}
+		// 窗口特征统计
+		val window_scope = Array(3, 5, 7, 15, 30)
+		for (window <- window_scope){
+			var window_agg = full_click_data.withColumn("window_num_"+window.toString, full_click_data("time")/window)
+			println("window_num=", window)
+			window_agg.show(false)
 		}
 		
 		user_agg
