@@ -125,7 +125,7 @@ object FeatureProcess {
 			   | collect_list(time) as time_list, collect_list(creative_id) as creative_list, collect_list(ad_id) as ad_list,
 			   | collect_set(product_id) as product_set, collect_set(product_category) as category_set,
 			   | collect_set(advertiser_id) as advertiser_set, collect_set(industry) as industry_set
-			   |  from (select * from txgg_temp order by time) as A group by user_id, age, gender """.stripMargin
+			   | from (select * from txgg_temp order by time) as A group by user_id, age, gender """.stripMargin
 		val user_agg = sparkSession.sql(user_agg_sql)
 		println("user_agg info")
 		def getDuring(time_list: scala.collection.mutable.WrappedArray[Int]): Array[Float] ={
@@ -153,7 +153,7 @@ object FeatureProcess {
 			val user_max_product = sparkSession.sql(user_max_click_sql)
 			println("user_max_click data")
 			user_max_product.show(false)
-			val tmp =
+//			val tmp =
 		}
 		
 		test
