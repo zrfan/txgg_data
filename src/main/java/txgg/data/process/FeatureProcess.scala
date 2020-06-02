@@ -138,7 +138,7 @@ object FeatureProcess {
 		val durUDF = udf((time_list:scala.collection.mutable.WrappedArray[Int]) => {getDuring(time_list)})
 		val test = user_agg.withColumn("active_avg_clicks", user_agg("all_click_cnt")*1.0/user_agg("active_days"))
 			.withColumn("dur", durUDF(col("time_list")))
-			.select(col("dur").getItem(0).as("mean_dur"),
+			.select(col("user_id"), col("dur").getItem(0).as("mean_dur"),
 				col("dur").getItem(1).as("max_dur"),
 				col("dur").getItem(2).as("min_dur"))
 		println("test mean dur")
