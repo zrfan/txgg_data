@@ -148,17 +148,23 @@ object FeatureProcess {
 			StructField("time", IntegerType), StructField("user_id", IntegerType), StructField("creative_id", IntegerType),
 			StructField("click_times", IntegerType)
 		))
-		val train_click_data = sparkSession.read.schema(click_schema).format("csv").option("header", "true")
-			.load(dataPath + "/train_preliminary/click_log.csv")
-		val test_click_data = sparkSession.read.schema(click_schema).format("csv").option("header", "true")
-			.load(dataPath + "/test/click_log.csv").repartition(numPartitions)
-		val all_click_data = train_click_data.union(test_click_data).repartition(numPartitions)
 		val user_schema = StructType(List(
 			StructField("user_id", IntegerType), StructField("age", IntegerType), StructField("gender", IntegerType)
 		))
+		
+		val train_click_data = sparkSession.read.schema(click_schema).format("csv").option("header", "true")
+			.load(dataPath + "/train_preliminary/click_log.csv")
 		val user_data = sparkSession.read.schema(user_schema).format("csv").option("header", "true")
 			.load(dataPath + "/train_preliminary/user.csv").repartition(numPartitions)
-		val click_user_data = all_click_data.join(user_data, usingColumn = "user_id").na.fill(Map("age" -> 0, "gender" -> 0))
+		
+		val train_click = train_click_data.join(user_data, usingColumn = "user_id")
+		
+		val test_click_data = sparkSession.read.schema(click_schema).format("csv").option("header", "true")
+			.load(dataPath + "/test/click_log.csv").repartition(numPartitions).withColumn("age", lit(0)).withColumn("gender", lit(0))
+		
+		val all_click_data = train_click.union(test_click_data).repartition(numPartitions)
+		
+		val click_user_data = all_click_data
 		println("all click data")
 		click_user_data.show(false)
 		println("all click count=", click_user_data.count())
