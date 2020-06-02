@@ -6,10 +6,11 @@ import org.apache.spark.ml.evaluation.{BinaryClassificationEvaluator, Multiclass
 import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql
-import org.apache.spark.sql.functions.{count, lit, sum, udf, col}
+import org.apache.spark.sql.functions.{col, count, lit, sum, udf}
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
+import org.apache.spark.util.StatCounter
 
 import scala.reflect.internal.util.TableDef.Column
 
@@ -55,7 +56,7 @@ object FeatureProcess {
 		
 		val all_feature_cols = Array("all_click_cnt", "active_days", "active_avg_clicks",
 			"creative_cnt", "ad_cnt", "product_cnt", "category_cnt", "advertiser_cnt", "industry_cnt",
-			"mean_dur", "max_dur", "min_dur",
+			"mean_dur", "max_dur", "min_dur", "mean_dur2", "max_dur2", "min_dur2", "stdev", "variance", "popStdev", "sampleStdev", "popVariance", "sampleVariance",
 			"max_click_product_id", "max_click_product_category", "max_click_advertiser_id", "max_click_industry")
 		
 		val all_data = user_feature.select((all_feature_cols ++ Array("user_id", "age", "gender")).map(x => col(x)): _*)
@@ -99,7 +100,6 @@ object FeatureProcess {
 	}
 	
 	def userFeatureProcess(full_click_data: Dataset[Row], sparkSession: SparkSession, savePath: String, numPartitions: Int): Dataset[Row] = {
-		val user_grouped = full_click_data.groupBy("user_id", "age", "gender")
 		// 全部用户的平均点击数：35.679
 		full_click_data.createTempView("txgg_temp")
 		val user_agg_sql =
@@ -122,7 +122,10 @@ object FeatureProcess {
 			val mean_dur = dur_list.sum / dur_list.length
 			val max_dur = dur_list.max
 			val min_dur = dur_list.min
-			Array(mean_dur, max_dur, min_dur)
+			val stats = StatCounter()
+			for(x <- dur_list) stats.merge(x)
+			Array(mean_dur, max_dur, min_dur, stats.mean, stats.max, stats.min, stats.stdev, stats.variance,
+				stats.popStdev, stats.sampleStdev, stats.popVariance, stats.sampleVariance)
 		}
 		
 		val durUDF = udf((time_list: scala.collection.mutable.WrappedArray[Int]) => {
@@ -132,7 +135,16 @@ object FeatureProcess {
 			.withColumn("dur", durUDF(col("time_list")))
 			.select(col("user_id"), col("dur").getItem(0).as("mean_dur"),
 				col("dur").getItem(1).as("max_dur"),
-				col("dur").getItem(2).as("min_dur"))
+				col("dur").getItem(2).as("min_dur"),
+				col("dur").getItem(3).as("mean_dur2"),
+				col("dur").getItem(4).as("max_dur2"),
+				col("dur").getItem(5).as("min_dur2"),
+				col("dur").getItem(6).as("stdev"),
+				col("dur").getItem(7).as("variance"),
+				col("dur").getItem(8).as("popStdev"),
+				col("dur").getItem(9).as("sampleStdev"),
+				col("dur").getItem(10).as("popVariance"),
+				col("dur").getItem(11).as("sampleVariance"))
 		println("test mean dur")
 		user_dur.show(false)
 		user_agg = user_agg.join(user_dur, usingColumn = "user_id")
@@ -156,12 +168,14 @@ object FeatureProcess {
 			val time_udf = udf((time: Int) => {
 				math.floor((time - 1) / window)
 			})
-			var window_agg = full_click_data.withColumn("window_num_" + window.toString, time_udf(col("time")))
+			
+			var window_df = full_click_data.withColumn("window_num_" + window.toString, time_udf(col("time")))
 			println("window_num=", window)
-			window_agg.show(false)
+			window_df.show(false)
 			val feature_names = Array("creative_id", "ad_id", "product_id", "product_category", "advertiser_id", "industry")
 			for (feature_name <- feature_names) {
-			
+				val window_agg = window_df.groupBy("user_id", "window_num_" + window.toString)
+				val res = window_agg.agg(sum("click_times"), )
 			}
 		}
 		
