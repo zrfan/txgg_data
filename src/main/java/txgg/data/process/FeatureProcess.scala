@@ -29,18 +29,22 @@ object FeatureProcess {
 		val savePath = "/home/fzr/txgg/data/processed/"
 		println("dataPath=", dataPath)
 		println("funcname=", func_name)
-		val all_ad_data = readAllAdData(sparkSession, dataPath, savePath, numPartitions)
+		val all_ad_data = readAllAdData(sparkSession, dataPath, savePath, numPartitions).persist(StorageLevel.MEMORY_AND_DISK)
 		println("all_ad data=")
 		all_ad_data.show(false) // 去重后广告数3412773
 		println("all_ad_data count=", all_ad_data.count())
 		
-		val all_click_data = readAllClickData(sparkSession, dataPath, savePath, numPartitions) // user click age&gender
+		val all_click_data = readAllClickData(sparkSession, dataPath, savePath, numPartitions).persist(StorageLevel.MEMORY_AND_DISK) // user click age&gender
 		println("all_click_data count=", all_click_data.count())
+		
+		println("all_ad_click_data_before_join")
+		all_ad_data.show(50, false)
+		all_click_data.show(50, false)
 		
 		val full_click_data = all_click_data.join(all_ad_data, usingColumn = "creative_id").repartition(numPartitions)
 			.persist(StorageLevel.MEMORY_AND_DISK)
-		println("full click data")
-		full_click_data.show(false)
+		println("full click data after join")
+		full_click_data.show(50, false)
 		
 		
 		// 用户特征提取
@@ -175,7 +179,7 @@ object FeatureProcess {
 		
 		val click_user_data = all_click_data
 		println("all click data")
-		click_user_data.show(false)
+		click_user_data.show(50, false)
 		println("all click count=", click_user_data.count())
 		click_user_data
 	}
