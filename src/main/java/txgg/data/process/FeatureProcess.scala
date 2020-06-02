@@ -47,7 +47,7 @@ object FeatureProcess {
 		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
 		println("user_feature")
 		user_feature.select("user_id", "age", "gender", "all_click_cnt", "active_days", "creative_cnt",
-			"ad_id_cnt", "product_id_cnt", "category_cnt", "advertiser_cnt", "industry_cnt")
+			"ad_cnt", "product_cnt", "category_cnt", "advertiser_cnt", "industry_cnt")
 			.show(false)
 		val all_feature_cols = Array("all_click_cnt", "active_days", "creative_cnt", "ad_id_cnt", "product_id_cnt",
 			"category_cnt", "advertiser_cnt", "industry_cnt")
@@ -79,7 +79,7 @@ object FeatureProcess {
 		
 		val val_res = model.transform(test)
 		println("val_res=", val_res)
-		val evaluator = new MulticlassClassificationEvaluator().setLabelCol("age").setPredictionCol("predict_label")
+		val evaluator = new MulticlassClassificationEvaluator().setLabelCol("label").setPredictionCol("predict_label")
 		println("evalutor=", evaluator.evaluate(val_res))
 		
 		val predict = user_feature.filter("age=0 and gender=0")
@@ -113,18 +113,19 @@ object FeatureProcess {
 		val user_info = user_grouped.agg(sum("click_times").as("all_click_cnt"),
 			count("time").as("active_days"),
 			count("creative_id").as("creative_cnt"),
-			count("ad_id").as("ad_id_cnt"),
-			count("product_id").as("product_id_cnt"),
+			count("ad_id").as("ad_cnt"),
+			count("product_id").as("product_cnt"),
 			count("product_category").as("category_cnt"),
 			count("advertiser_id").as("advertiser_cnt"),
 			count("industry").as("industry_cnt"))
 		full_click_data.createTempView("txgg_temp")
 		val user_agg_sql =
-			s"""select user_id, age, gender, count(distinct time) as active_days, count(distinct creative_id) as creative_cnt,
+			s"""select user_id, age, gender, sum(click_times) as all_click_cnt, count(distinct time) as active_days,
+			   | count(distinct creative_id) as creative_cnt,
 			   | count(distinct ad_id) as ad_cnt, count(distinct product_id) as product_cnt,
 			   | count(distinct product_category) as category_cnt, count(distinct advertiser_id) as advertiser_cnt,
 			   | count(distinct industry) as industry_cnt,
-			   | collect_list(time) as time_list, collect_list(creative_id) as creat_list, collect_list(ad_id) as ad_list,
+			   | collect_list(time) as time_list, collect_list(creative_id) as creative_list, collect_list(ad_id) as ad_list,
 			   | collect_set(product_id) as product_set, collect_set(product_category) as category_set,
 			   | collect_set(advertiser_id) as advertiser_set, collect_set(industry) as industry_set
 			   |  from (select * from txgg_temp order by time) as A group by user_id, age, gender """.stripMargin
