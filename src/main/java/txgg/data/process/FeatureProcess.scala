@@ -30,8 +30,8 @@ object FeatureProcess {
 		println("dataPath=", dataPath)
 		println("funcname=", func_name)
 		val all_ad_data = readAllAdData(sparkSession, dataPath, savePath, numPartitions)
-		
-		all_ad_data.take(10).foreach(println) // 去重后广告数3412773
+		println("all_ad data=")
+		all_ad_data.show(false) // 去重后广告数3412773
 		println("all_ad_data count=", all_ad_data.count())
 		
 		val all_click_data = readAllClickData(sparkSession, dataPath, savePath, numPartitions) // user click age&gender
@@ -66,11 +66,7 @@ object FeatureProcess {
 		// train
 		val lightgbm = new LightGBMClassifier().setLabelCol("label").setFeaturesCol("features")
 			.setPredictionCol("predict_label").setProbabilityCol("probability")
-//		val labelConverter = new IndexToString().setInputCol("predict_label").setOutputCol("predict_age")
-//			.setLabels(Array("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"))
-		
 		val Array(train, test) = all_train.randomSplit(Array(0.7, 0.3), seed = 2020L)
-		
 		val model = lightgbm.fit(train)
 		
 		val val_res = model.transform(test)
@@ -111,7 +107,7 @@ object FeatureProcess {
 			   | from (select * from txgg_temp order by time) as A group by user_id, age, gender """.stripMargin
 		var user_agg = sparkSession.sql(user_agg_sql)
 		println("user_agg info")
-		//
+		// 点击间隔统计
 		def getDuring(time_list: scala.collection.mutable.WrappedArray[Int]): Array[Float] ={
 			val dur_list = time_list.map(x => x.toFloat).sorted.sliding(2).map(x => x.last - x.head).toList
 			val mean_dur = dur_list.sum/dur_list.length
@@ -147,6 +143,10 @@ object FeatureProcess {
 			var window_agg = full_click_data.withColumn("window_num_"+window.toString, full_click_data("time")/window)
 			println("window_num=", window)
 			window_agg.show(false)
+			val feature_names = Array("creative_id", "ad_id", "product_id", "product_category", "advertiser_id", "industry")
+			for (feature_name <- feature_names){
+			
+			}
 		}
 		
 		user_agg
@@ -185,22 +185,27 @@ object FeatureProcess {
 			StructField("creative_id", IntegerType), StructField("ad_id", IntegerType), StructField("product_id", IntegerType),
 			StructField("product_category", IntegerType), StructField("advertiser_id", IntegerType), StructField("industry", IntegerType)
 		))
-		val train_ad_data = sparkSession.read.schema(schema).format("csv").option("header", "true")
-			.load(dataPath + "/train_preliminary/ad.csv")
+//		val train_ad_data = sparkSession.read.schema(schema).format("csv").option("header", "true")
+//			.load(dataPath + "/train_preliminary/ad.csv")
+//		println("train_ad_data count=", train_ad_data.count())  //2481136L
+//		train_ad_data.show(false)
+//
+//		val test_ad_data = sparkSession.read.schema(schema).format("csv").option("header", "true").load(dataPath + "/test/ad.csv")
+//		println("test_ad_data count=", test_ad_data.count())  //2618160L
+//		test_ad_data.show(false)
+//
+//		// creative_id, ad_id, product_id, product_category, advertiser_id, industry
+//		val all_ad_data = train_ad_data.union(test_ad_data).repartition(numPartitions)
+//			.na.fill(Map("ad_id" -> 4000000, "product_id" -> 60000, "product_category" -> 30,
+//			"advertiser_id" -> 63000, "industry" -> 400)).distinct()
+		val all_ad_data = sparkSession.read.schema(schema).format("csv").option("header", "true")
+					.load(dataPath + "/all_ad.csv").repartition(numPartitions)
+					.na.fill(Map("ad_id" -> 4000000, "product_id" -> 60000, "product_category" -> 30,
+						"advertiser_id" -> 63000, "industry" -> 400)).distinct()
 		
-		val test_ad_data = sparkSession.read.schema(schema).format("csv").option("header", "true").load(dataPath + "/test/ad.csv")
-		
-		// creative_id, ad_id, product_id, product_category, advertiser_id, industry
-		val all_ad_data = train_ad_data.union(test_ad_data).repartition(numPartitions)
-			.distinct().na.fill(Map("ad_id" -> 4000000, "product_id" -> 60000, "product_category" -> 30,
-			"advertiser_id" -> 63000, "industry" -> 400))
-		
-		
-		println("all ad count=", all_ad_data.count()) // 3412773
+		println("all ad count=", all_ad_data.count()) // 3412772
 		println("all Ad data")
 		all_ad_data.show(false)
-		//		ad_df.repartition(2).write.format("tfrecords").option("recordType", "Example")
-		//			.mode("overwrite").save(savePath + s"/txpredict.tfrecords")
 		all_ad_data
 	}
 	
