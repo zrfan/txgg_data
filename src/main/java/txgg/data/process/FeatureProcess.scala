@@ -6,7 +6,7 @@ import org.apache.spark.ml.evaluation.{BinaryClassificationEvaluator, Multiclass
 import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql
-import org.apache.spark.sql.functions.{count, lit, sum}
+import org.apache.spark.sql.functions.{count, lit, sum, udf}
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
@@ -24,7 +24,7 @@ object FeatureProcess {
 		val sparkContext = sparkSession.sparkContext
 		val sparkConf = sparkContext.getConf
 		val sqlContext = new SQLContext(sparkContext)
-		val numPartitions = 160
+		val numPartitions = 260
 		val dataPath = "/home/fzr/txgg/data/origin/"
 		val savePath = "/home/fzr/txgg/data/processed/"
 		println("dataPath=", dataPath)
@@ -55,25 +55,19 @@ object FeatureProcess {
 		println("all_data")
 		all_data.show(200, false)
 		
-		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("assembled_features")
+		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("features")
 		val all_assembled_data = assembler.transform(all_data)
 		println("assembled")
 		all_assembled_data.show(false)
-//		val labelIndexer = new StringIndexer().setInputCol("age").setOutputCol("age_reindex").fit(all_train)
-//		println("labels:", labelIndexer.labels.mkString(" ; "))
-//		val tmp = labelIndexer.transform(all_train)
-//		println("transform labelInderer")
-//		tmp.show(false)
 		val all_train = all_assembled_data.filter("age!=0 and gender!=0").withColumn("label", user_feature("gender")*1.0-1.0)
 		
 		// train
-		val lightgbm = new LightGBMClassifier().setLabelCol("label").setFeaturesCol("assembled_features")
+		val lightgbm = new LightGBMClassifier().setLabelCol("label").setFeaturesCol("features")
 			.setPredictionCol("predict_label").setProbabilityCol("probability")
 //		val labelConverter = new IndexToString().setInputCol("predict_label").setOutputCol("predict_age")
 //			.setLabels(Array("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"))
 		
 		val Array(train, test) = all_train.randomSplit(Array(0.7, 0.3), seed = 2020L)
-//		val pipeline = new Pipeline().setStages(Array(assembler, lightgbm))
 		
 		val model = lightgbm.fit(train)
 		
@@ -87,6 +81,7 @@ object FeatureProcess {
 		val predict = all_assembled_data.filter("age=0 and gender=0")
 		println("predict data=")
 		predict.show(false)
+		println("predict_data count=", predict.count())
 		val predict_res = model.transform(predict)
 		println("predict_res=")
 		predict_res.show(false)
@@ -133,12 +128,15 @@ object FeatureProcess {
 			   |  from (select * from txgg_temp order by time) as A group by user_id, age, gender """.stripMargin
 		val user_agg = sparkSession.sql(user_agg_sql)
 		println("user_agg info")
-		def getDuring(time_list: List[String]): Unit ={
+		def getDuring(time_list: Array[String]): Unit ={
 			val dur_list = time_list.map(x => x.toFloat).sorted.sliding(2).map(x => x.last - x.head).toList
 			val mean_dur = dur_list.sum/dur_list.length
 			mean_dur
 		}
-//		val test = user_agg.withColumn("mean_dur", getDuring(col("time_list")))
+		val udfFunc = udf((a:Row) => {getDuring(a.getAs("time_list"))})
+		val test = user_agg.withColumn("mean_dur", udfFunc())
+		println("test mean dur")
+		test.show(false)
 //		user_agg.show(false)
 		println("user feature info")
 //		user_info.show(false)
