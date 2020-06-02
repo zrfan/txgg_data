@@ -58,8 +58,10 @@ object FeatureProcess {
 	def newUserList(full_click_data: Dataset[Row], sparkSession: SparkSession, numPartitions: Int, savePath: String): Unit ={
 		full_click_data.createTempView("txgg_temp")
 		val data_sql =
-			s"""select A.user_id, A.age, A.gender, collect_list(concat_ws("#", cast(time as string), creative_id, ad_id,
-                    product_id,  product_category, advertiser_id, industry, cast(click_times as string))) as seq
+			s"""select cast(A.user_id as string), cast(A.age as string), cast(A.gender as string),
+	            collect_list(concat_ws("#", cast(time as string), cast(creative_id as string), cast(ad_id as tring),
+                    cast(product_id as string),  cast(product_category as string),
+                    cast(advertiser_id as string), cast(industry as string), cast(click_times as string))) as seq
             from (select * from txgg_temp order by user_id,time) as A
             group by A.user_id,A.age,A.gender""".stripMargin
 		def getUserSeq(list: Array[String]): Array[String] ={
