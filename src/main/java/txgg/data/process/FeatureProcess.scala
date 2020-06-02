@@ -31,7 +31,8 @@ object FeatureProcess {
 		val all_click_data = readAllClickData(sparkSession, dataPath, savePath, numPartitions) // user click age&gender
 		println("all_click_data count=", all_click_data.count())
 		
-		val full_click_data = all_click_data.join(all_ad_data, usingColumn = "creative_id").repartition(numPartitions).persist(StorageLevel.MEMORY_AND_DISK)
+		val full_click_data = all_click_data.join(all_ad_data, usingColumn = "creative_id").repartition(numPartitions)
+			.persist(StorageLevel.MEMORY_AND_DISK)
 		println("full click data")
 		full_click_data.show(false)
 		
@@ -77,7 +78,7 @@ object FeatureProcess {
 			   | collect_list(time) as time_list, collect_list(creative_id) as creat_list, collect_list(ad_id) as ad_list,
 			   | collect_set(product_id) as product_set, collect_set(product_category) as product_category_set,
 			   | collect_set(advertiser_id) as advertiser_set, collect_set(industry) as industry_set
-			   |  from txgg_temp group by user_id order by time""".stripMargin
+			   |  from (select * from txgg_temp order by time) as A group by user_id """.stripMargin
 		val user_agg = sparkSession.sql(user_agg_sql)
 		println("user_agg info")
 		user_agg.show(false)
