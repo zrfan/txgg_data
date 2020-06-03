@@ -82,12 +82,12 @@ object FeatureProcess {
 		}else{
 			println("exist full click data")
 			val schema = StructType(List(
-				StructField("time", IntegerType), StructField("user_id", IntegerType), StructField("creative_id", IntegerType),
+				StructField("creative_id", IntegerType), StructField("time", IntegerType), StructField("user_id", IntegerType),
 				StructField("click_times", IntegerType), StructField("age", IntegerType), StructField("gender", IntegerType),
 				StructField("ad_id", IntegerType), StructField("product_id", IntegerType), StructField("product_category", IntegerType),
 				StructField("advertiser_id", IntegerType), StructField("industry", IntegerType)
 			))
-			val full_click_data = sparkSession.read.format("csv").option("header", true).option("sep", ",")  //.schema(schema)
+			val full_click_data = sparkSession.read.schema(schema).format("csv").option("header", true).option("sep", ",")  //.schema(schema)
 				.load(full_click_filename).repartition(numPartitions)
 			println("full_click_data")
 			full_click_data.show(50, false)
