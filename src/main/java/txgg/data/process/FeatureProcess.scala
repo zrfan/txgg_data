@@ -214,6 +214,7 @@ object FeatureProcess {
 			.load(dataPath + "/train_preliminary/user.csv").repartition(numPartitions)
 		
 		val train_click = train_click_data.join(user_data, usingColumn = "user_id")
+		train_click_data.take(50).foreach(p => println("train click data=", p.mkString("; ")))
 		
 		val test_click_data = sparkSession.read.schema(click_schema).format("csv").option("header", true)
 			.load(dataPath + "/test/click_log.csv").repartition(numPartitions)
