@@ -78,20 +78,29 @@ object FeatureProcess {
 		val all_assembled_data = assembler.transform(all_data)
 		println("assembled")
 		all_assembled_data.show(false)
-		val all_train = all_assembled_data.filter("age!=0 and gender!=0").withColumn("label", user_feature("gender") * 1.0 - 1.0)
-		
-		// train
-		val lightgbm = new LightGBMClassifier().setLabelCol("label").setFeaturesCol("features")
-			.setPredictionCol("predict_label").setProbabilityCol("probability")
+		val all_train = all_assembled_data.filter("age!=0 and gender!=0")
+			.withColumn("label_gender", user_feature("gender") * 1.0 - 1.0)
+			.withColumn("label_age", user_feature("age") * 1.0 - 1.0)
 		val Array(train, test) = all_train.randomSplit(Array(0.7, 0.3), seed = 2020L)
-		val model = lightgbm.fit(train)
+		// train gender
+		val lightgbm_gender = new LightGBMClassifier().setLabelCol("label_gender").setFeaturesCol("features")
+			.setPredictionCol("predict_gender").setProbabilityCol("gender_probability")
 		
-		val val_res = model.transform(test)
-		println("val_res=", val_res)
-		val_res.show(false)
-		val evaluator = new BinaryClassificationEvaluator().setLabelCol("label").setRawPredictionCol("predict_label")
-		//		val evaluator = new MulticlassClassificationEvaluator().setLabelCol("label").setPredictionCol("predict_label")
-		println("evalutor=", evaluator.evaluate(val_res))
+		val model_gender = lightgbm_gender.fit(train)
+		val val_gender = model_gender.transform(test)
+		println("val_gender=", val_gender)
+		val_gender.show(false)
+		val evaluator_gender = new BinaryClassificationEvaluator().setLabelCol("label_gender").setRawPredictionCol("predict_gender")
+		println("gender evalutor=", evaluator_gender.evaluate(val_gender))
+		
+		// train age
+		val lightgbm_age = new LightGBMClassifier().setLabelCol("label_age").setFeaturesCol("features")
+			.setPredictionCol("predict_age").setProbabilityCol("age_probability")
+		val model_age = lightgbm_age.fit(train)
+		val val_age = model_age.transform(test)
+		println("val_age=", val_age.show(false))
+		val evaluator_age = new MulticlassClassificationEvaluator().setLabelCol("label_age").setPredictionCol("predict_age")
+		println("gender evalutor=", evaluator_age.evaluate(val_age))
 		
 		
 		//predict
