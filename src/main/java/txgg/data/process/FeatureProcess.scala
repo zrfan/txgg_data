@@ -62,7 +62,7 @@ object FeatureProcess {
 	
 	def featureTest(full_click_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): Unit ={
 		// 用户特征提取
-		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
+		val user_feature = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions).persist(StorageLevel.MEMORY_AND_DISK)
 		println("user_feature")
 		user_feature.show(false)
 		
@@ -72,9 +72,10 @@ object FeatureProcess {
 			"max_click_product_id", "max_click_product_category", "max_click_advertiser_id", "max_click_industry",
 			"window3_click_times_avg")
 		
-		val all_data = user_feature.select((all_feature_cols ++ Array("user_id", "age", "gender")).map(x => col(x)): _*)
+		val all_data = user_feature.select((all_feature_cols ++ Array("user_id", "age", "gender")).map(x => col(x)): _*).persist(StorageLevel.MEMORY_AND_DISK)
 		println("all_data")
 		all_data.show(200, false)
+		user_feature.unpersist()
 		
 		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("features")
 		val all_assembled_data = assembler.transform(all_data)
