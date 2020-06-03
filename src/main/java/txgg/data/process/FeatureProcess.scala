@@ -6,7 +6,7 @@ import org.apache.spark.ml.evaluation.{BinaryClassificationEvaluator, Multiclass
 import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql
-import org.apache.spark.sql.functions.{approx_count_distinct, col, count, lit, sum, udf}
+import org.apache.spark.sql.functions.{approx_count_distinct, col, count, lit, sum, udf, mean, max, min}
 import org.apache.spark.sql.types.{ArrayType, IntegerType, StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
@@ -33,11 +33,14 @@ object FeatureProcess {
 		println("funcname=", func_name)
 		val all_ad_data = readAllAdData(sparkSession, dataPath, savePath, numPartitions).persist(StorageLevel.MEMORY_AND_DISK)
 		println("all_ad data=")
-		all_ad_data.show(false) // 去重后广告数3412773
+		all_ad_data.show(50, false) // 去重后广告数3412773
 		println("all_ad_data count=", all_ad_data.count())
 		
 		val all_click_data = readAllClickData(sparkSession, dataPath, savePath, numPartitions).persist(StorageLevel.MEMORY_AND_DISK) // user click age&gender
 		println("all_click_data count=", all_click_data.count())
+		val tmp = all_click_data.filter("time>91")
+		println("click time>91")
+		tmp.show(false)
 		
 		println("all_ad_click_data_before_join")
 		all_ad_data.show(50, false)
@@ -182,10 +185,14 @@ object FeatureProcess {
 			val feature_names = Array("creative_id", "ad_id", "product_id", "product_category", "advertiser_id", "industry")
 			for (feature_name <- feature_names) {
 				val window_agg = window_df.groupBy("user_id", "window_num_" + window.toString)
-				val res = window_agg.agg(sum("click_times").as(feature_name+window+"click_times"),
-					approx_count_distinct(feature_name).as(feature_name+window+"_nunique"))
+				val window_res = window_agg.agg(sum("click_times").as(feature_name+"_window"+window+"click_times"),
+					approx_count_distinct(feature_name).as(feature_name+"_window"+window+"_nunique"))
 				println("window_agg=", feature_name, " window_num="+window.toString)
-				res.show(20, false)
+				window_res.show(20, false)
+				val user_window_agg = window_res.groupBy("user_id")
+				val user_res = user_window_agg.agg(mean(feature_name+"_window"+window+"click_times").as(feature_name+"_window"+window+"click_times_avg"),
+					mean(feature_name+"_window"+window+"_nunique").as(feature_name+"_window"+window+"_nunique_avg"))
+				user_res.show(20, false)
 			}
 		}
 		
