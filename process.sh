@@ -21,7 +21,7 @@ mvn package
 tf_jar_path="--jars /home/fzr/env/spark-tensorflow-connector_2.11-1.10.0.jar"
 #
 spark-submit --name "txgg-data-preprocess" \
-    --driver-memory 15g \
+    --driver-memory 10g \
     --jars "/home/fzr/env/spark-tensorflow-connector_2.11-1.10.0.jar" \
     --class txgg.data.process.FeatureProcess \
     ./target/txgg_data-1.0-SNAPSHOT-jar-with-dependencies.jar $funcname > txgg.log 2>&1 &
