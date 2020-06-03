@@ -105,7 +105,7 @@ object FeatureProcess {
 			"creative_cnt", "ad_cnt", "product_cnt", "category_cnt", "advertiser_cnt", "industry_cnt",
 			"mean_dur", "max_dur", "min_dur", "mean_dur2", "max_dur2", "min_dur2", "stdev", "variance", "popStdev", "sampleStdev", "popVariance", "sampleVariance",
 			"max_click_product_id", "max_click_product_category", "max_click_advertiser_id", "max_click_industry",
-			"window3_click_times_avg")
+			"window7_click_times_avg")
 		
 		val all_data = user_feature.select((all_feature_cols ++ Array("user_id", "age", "gender")).map(x => col(x)): _*).persist(StorageLevel.MEMORY_AND_DISK)
 		println("all_data")
