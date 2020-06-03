@@ -123,15 +123,16 @@ object FeatureProcess {
 	def userFeatureProcess(full_click_data: Dataset[Row], sparkSession: SparkSession, savePath: String, numPartitions: Int): Dataset[Row] = {
 		// 全部用户的平均点击数：35.679
 		full_click_data.createTempView("txgg_temp")
+//		 collect_list(creative_id) as creative_list, collect_list(ad_id) as ad_list,
+// collect_set(product_id) as product_set, collect_set(product_category) as category_set,
+// collect_set(advertiser_id) as advertiser_set, collect_set(industry) as industry_set
 		val user_agg_sql =
 			s"""select user_id, age, gender, sum(click_times) as all_click_cnt, count(distinct time) as active_days,
 			   | count(distinct creative_id) as creative_cnt,
 			   | count(distinct ad_id) as ad_cnt, count(distinct product_id) as product_cnt,
 			   | count(distinct product_category) as category_cnt, count(distinct advertiser_id) as advertiser_cnt,
 			   | count(distinct industry) as industry_cnt,
-			   | collect_list(time) as time_list, collect_list(creative_id) as creative_list, collect_list(ad_id) as ad_list,
-			   | collect_set(product_id) as product_set, collect_set(product_category) as category_set,
-			   | collect_set(advertiser_id) as advertiser_set, collect_set(industry) as industry_set
+			   | collect_list(time) as time_list
 			   | from (select * from txgg_temp order by time) as A group by user_id, age, gender """.stripMargin
 		var user_agg = sparkSession.sql(user_agg_sql)
 		println("user_agg info")
@@ -182,8 +183,8 @@ object FeatureProcess {
 //			user_max_product.show(false)
 			user_agg = user_agg.join(user_max_product, usingColumn = "user_id")
 		}
-		// 窗口特征统计
-		val window_scope = Array(3, 5, 7)
+		// 窗口特征统计 , 3, 5, 7, 15, 30
+		val window_scope = Array(7, 30)
 		
 		for (window <- window_scope) {
 			val time_udf = udf((time: Int) => {
@@ -202,8 +203,7 @@ object FeatureProcess {
 			
 			val feature_names = Array("creative_id", "ad_id", "product_id", "product_category", "advertiser_id", "industry")
 			for (feature_name <- feature_names) {
-				val window_res = window_agg.agg(sum("click_times").as(feature_name+"_window"+window+"_click_times"),
-					approx_count_distinct(feature_name).as(feature_name+"_window"+window+"_nunique"))
+				val window_res = window_agg.agg(approx_count_distinct(feature_name).as(feature_name+"_window"+window+"_nunique"))
 				println("window_agg=", feature_name, " window_num="+window.toString)
 				window_res.show(20, false)
 				val user_window_agg = window_res.groupBy("user_id")
