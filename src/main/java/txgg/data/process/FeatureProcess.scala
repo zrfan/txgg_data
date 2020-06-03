@@ -52,11 +52,11 @@ object FeatureProcess {
 		all_click_data.unpersist()
 		println("full click data after join")
 		full_click_data.show(50, false)
-//		if (func_name == "newuserlist"){
-//			newUserList(full_click_data, sparkSession, numPartitions, savePath)
-//		}else if (func_name == "featuretest"){
-//			featureTest(full_click_data, sparkSession, dataPath, savePath, numPartitions)
-//		}
+		if (func_name == "newuserlist"){
+			newUserList(full_click_data, sparkSession, numPartitions, savePath)
+		}else if (func_name == "featuretest"){
+			featureTest(full_click_data, sparkSession, dataPath, savePath, numPartitions)
+		}
 	}
 	
 	def featureTest(full_click_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): Unit ={
@@ -233,12 +233,12 @@ object FeatureProcess {
 		test_click_data.take(10).foreach(p => println("test click data=", p.toString()))
 		
 		val all_click_data = train_click.union(test_click_data).repartition(numPartitions)
+			.map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6))
 		
 		all_click_data.take(50).foreach(p => println("all click data=", p.toString()))
 		
-		println("all click count=", all_click_data.count())
-//		sparkSession.createDataFrame(all_click_data, schema)
-		train_click_data
+		println("all click count=", all_click_data.count()) // 63668283
+		sparkSession.createDataFrame(all_click_data, schema)
 	}
 	
 	def readAllAdData(sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): sql.DataFrame = {
