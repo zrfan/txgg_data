@@ -291,6 +291,9 @@ object FeatureProcess {
 		
 		println("all click count=", all_click_data.count()) // 63668283
 		val res = all_click_data.map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6))
+		val schema = StructType(List(
+			StructField("time", IntegerType), StructField("user_id", IntegerType), StructField("creative_id", IntegerType),
+			StructField("click_times", IntegerType), StructField("age", IntegerType), StructField("gender", IntegerType)))
 		sparkSession.createDataFrame(res, schema)
 	}
 	
