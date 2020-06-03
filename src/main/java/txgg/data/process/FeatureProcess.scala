@@ -26,7 +26,7 @@ object FeatureProcess {
 		val sparkContext = sparkSession.sparkContext
 		val sparkConf = sparkContext.getConf
 		val sqlContext = new SQLContext(sparkContext)
-		val numPartitions = 360
+		val numPartitions = 460
 		val dataPath = "/home/fzr/txgg/data/origin/"
 		val savePath = "/home/fzr/txgg/data/processed/"
 		println("dataPath=", dataPath)
