@@ -76,7 +76,6 @@ object FeatureProcess {
 			
 			val full_click_data = all_click_data.join(all_ad_df, usingColumns = Seq("creative_id"), joinType = "left_outer")
 				.repartition(numPartitions)
-				.persist(StorageLevel.MEMORY_AND_DISK)
 			// 保存文件
 			full_click_data.repartition(1).write.option("header", true).option("sep", ",").csv(full_click_filename)
 			full_click_data
