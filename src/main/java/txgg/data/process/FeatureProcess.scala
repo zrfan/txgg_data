@@ -1,12 +1,14 @@
 package txgg.data.process
 
+import java.io.File
+
 import com.microsoft.ml.spark.lightgbm.LightGBMClassifier
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.evaluation.{BinaryClassificationEvaluator, MulticlassClassificationEvaluator}
 import org.apache.spark.ml.feature.{IndexToString, StringIndexer, VectorAssembler}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql
-import org.apache.spark.sql.functions.{approx_count_distinct, col, count, lit, sum, udf, mean, max, min}
+import org.apache.spark.sql.functions.{approx_count_distinct, col, count, lit, max, mean, min, sum, udf}
 import org.apache.spark.sql.types.{ArrayType, IntegerType, StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SparkSession}
 import org.apache.spark.storage.StorageLevel
@@ -26,37 +28,71 @@ object FeatureProcess {
 		val sparkContext = sparkSession.sparkContext
 		val sparkConf = sparkContext.getConf
 		val sqlContext = new SQLContext(sparkContext)
-		val numPartitions = 460
+		val numPartitions = 560
 		val dataPath = "/home/fzr/txgg/data/origin/"
 		val savePath = "/home/fzr/txgg/data/processed/"
 		println("dataPath=", dataPath)
 		println("funcname=", func_name)
-		val all_ad_data = readAllAdData(sparkSession, dataPath, savePath, numPartitions).persist(StorageLevel.MEMORY_AND_DISK)
-		println("all_ad data=")
-		all_ad_data.show(50, false) // 去重后广告数3412773
-		println("all_ad_data count=", all_ad_data.count())
 		
-		val all_click_data = readAllClickData(sparkSession, dataPath, savePath, numPartitions).persist(StorageLevel.MEMORY_AND_DISK) // user click age&gender
-		println("all_click_data count=", all_click_data.count())
-		val tmp = all_click_data.filter("time>91")
-		println("click time>91")
-		tmp.show(false)
+		val full_click_data = getFullClickData(sparkSession, numPartitions, dataPath, savePath)
 		
-		println("all_ad_click_data_before_join")
-		all_ad_data.show(50, false)
-		all_click_data.show(50, false)
-		
-		val full_click_data = all_click_data.join(all_ad_data, usingColumns = Seq("creative_id"), joinType = "left_outer")
-			.repartition(numPartitions)
-			.persist(StorageLevel.MEMORY_AND_DISK)
-		all_click_data.unpersist()
-		all_ad_data.unpersist()
-		println("full click data after join")
-		full_click_data.show(50, false)
 		if (func_name == "newuserlist"){
 			newUserList(full_click_data, sparkSession, numPartitions, savePath)
 		}else if (func_name == "featuretest"){
 			featureTest(full_click_data, sparkSession, dataPath, savePath, numPartitions)
+		}
+	}
+	def getFullClickData(sparkSession: SparkSession, numPartitions: Int, dataPath: String, savePath: String): Dataset[Row] ={
+		val full_click_filename = dataPath+"/cleaned/full_click_ad.csv"
+		val full_click_file = new File(full_click_filename)
+		if (!full_click_file.exists){
+			// 读广告数据
+			val schema = StructType(List(
+				StructField("creative_id", StringType), StructField("ad_id", StringType), StructField("product_id", StringType),
+				StructField("product_category", StringType), StructField("advertiser_id", StringType), StructField("industry", StringType)
+			))
+			val value_map = Map("ad_id" -> "4000000", "product_id" -> "60000", "product_category" -> "30",
+				"advertiser_id" -> "63000", "industry" -> "400")
+			val all_ad_data = sparkSession.read.schema(schema).format("csv").option("header", true)
+				.load(dataPath + "/all_ad.csv").repartition(numPartitions).rdd
+				.map(p => (p.getAs[String]("creative_id"), p.getAs[String]("ad_id"), p.getAs[String]("product_id"),
+					p.getAs[String]("product_category"), p.getAs[String]("advertiser_id"), p.getAs[String]("industry")))
+				.map(p => (p._1, if (p._2 == "\\N") "4000000" else p._2,
+					if (p._3 == "\\N") "60000" else p._3,
+					if (p._4 == "\\N") "30" else p._4,
+					if (p._5 == "\\N") "63000" else p._5,
+					if (p._6 == "\\N") "400" else p._6)).map(p => Row(p._1.toInt, p._2.toInt, p._3.toInt, p._4.toInt, p._5.toInt, p._6.toInt))
+			val new_schema = StructType(List(
+				StructField("creative_id", IntegerType), StructField("ad_id", IntegerType), StructField("product_id", IntegerType),
+				StructField("product_category", IntegerType), StructField("advertiser_id", IntegerType), StructField("industry", IntegerType)
+			))
+			val all_ad_df = sparkSession.createDataFrame(all_ad_data, new_schema)
+			println("all_ad data=")
+			all_ad_df.show(50, false) // 去重后广告数3412773
+			println("all_ad_data count=", all_ad_df.count())
+			//  读点击数据
+			val all_click_data = readAllClickData(sparkSession, dataPath, savePath, numPartitions) // user click age&gender
+			println("all_click_data count=", all_click_data.count())
+			
+			val full_click_data = all_click_data.join(all_ad_df, usingColumns = Seq("creative_id"), joinType = "left_outer")
+				.repartition(numPartitions)
+				.persist(StorageLevel.MEMORY_AND_DISK)
+			// 保存文件
+			full_click_data.repartition(1).write.option("header", true).option("sep", ",").csv(full_click_filename)
+			full_click_data
+		}else{
+			println("exist full click data")
+			val schema = StructType(List(
+				StructField("time", IntegerType), StructField("user_id", IntegerType), StructField("creative_id", IntegerType),
+				StructField("click_times", IntegerType), StructField("age", IntegerType), StructField("gender", IntegerType),
+				StructField("ad_id", IntegerType), StructField("product_id", IntegerType), StructField("product_category", IntegerType),
+				StructField("advertiser_id", IntegerType), StructField("industry", IntegerType)
+			))
+			val full_click_data = sparkSession.read.format("csv").option("header", true).option("sep", ",")  //.schema(schema)
+				.load(full_click_filename).repartition(numPartitions)
+			println("full_click_data")
+			full_click_data.show(50, false)
+			full_click_data
 		}
 	}
 	
@@ -185,34 +221,35 @@ object FeatureProcess {
 //			user_max_product.show(false)
 			user_agg = user_agg.join(user_max_product, usingColumn = "user_id")
 		}
+		user_agg
 		// 窗口特征统计 , 3, 5, 7, 15, 30
 		val window_scope = Array(7, 30)
 		
-		for (window <- window_scope) {
-			val time_udf = udf((time: Int) => {
-				math.floor((time - 1) / window)
-			})
-			var window_df = full_click_data.withColumn("window_num_" + window.toString, time_udf(col("time")))
-			println("window_num=", window)
-			window_df.show(false)
-			
-			val window_agg = window_df.groupBy("user_id", "window_num_" + window.toString)
-			val click_times = window_agg.agg(sum("click_times").as("window"+window+"_click_times"))
-			val window_mean_click = click_times.groupBy("user_id")
-				.agg(mean("window"+window+"_click_times").as("window"+window+"_click_times_avg"))
-			window_mean_click.show(20, false)
-			user_agg = user_agg.join(window_mean_click, usingColumn = "user_id")
-			
-			val feature_names = Array("creative_id", "ad_id", "product_id", "product_category", "advertiser_id", "industry")
-			for (feature_name <- feature_names) {
-				val window_res = window_agg.agg(approx_count_distinct(feature_name).as(feature_name+"_window"+window+"_nunique"))
-				println("window_agg=", feature_name, " window_num="+window.toString)
-				window_res.show(20, false)
-				val user_window_agg = window_res.groupBy("user_id")
-				val user_res = user_window_agg.agg(mean(feature_name+"_window"+window+"_nunique").as(feature_name+"_window"+window+"_nunique_avg"))
-				user_res.show(20, false)
-			}
-		}
+//		for (window <- window_scope) {
+//			val time_udf = udf((time: Int) => {
+//				math.floor((time - 1) / window)
+//			})
+//			var window_df = full_click_data.withColumn("window_num_" + window.toString, time_udf(col("time")))
+//			println("window_num=", window)
+//			window_df.show(false)
+//
+//			val window_agg = window_df.groupBy("user_id", "window_num_" + window.toString)
+//			val click_times = window_agg.agg(sum("click_times").as("window"+window+"_click_times"))
+//			val window_mean_click = click_times.groupBy("user_id")
+//				.agg(mean("window"+window+"_click_times").as("window"+window+"_click_times_avg"))
+//			window_mean_click.show(20, false)
+//			user_agg = user_agg.join(window_mean_click, usingColumn = "user_id")
+//
+//			val feature_names = Array("creative_id", "ad_id", "product_id", "product_category", "advertiser_id", "industry")
+//			for (feature_name <- feature_names) {
+//				val window_res = window_agg.agg(approx_count_distinct(feature_name).as(feature_name+"_window"+window+"_nunique"))
+//				println("window_agg=", feature_name, " window_num="+window.toString)
+//				window_res.show(20, false)
+//				val user_window_agg = window_res.groupBy("user_id")
+//				val user_res = user_window_agg.agg(mean(feature_name+"_window"+window+"_nunique").as(feature_name+"_window"+window+"_nunique_avg"))
+//				user_res.show(20, false)
+//			}
+//		}
 		
 		user_agg
 	}
@@ -225,10 +262,7 @@ object FeatureProcess {
 		val user_schema = StructType(List(
 			StructField("user_id", IntegerType), StructField("age", IntegerType), StructField("gender", IntegerType)
 		))
-		val schema = StructType(List(
-			StructField("time", IntegerType), StructField("user_id", IntegerType), StructField("creative_id", IntegerType),
-			StructField("click_times", IntegerType), StructField("age", IntegerType), StructField("gender", IntegerType)
-		))
+		
 		
 		val train_click_data = sparkSession.read.schema(click_schema).format("csv").option("header", true)
 			.load(dataPath + "/train_preliminary/click_log.csv")
@@ -259,47 +293,6 @@ object FeatureProcess {
 		println("all click count=", all_click_data.count()) // 63668283
 		val res = all_click_data.map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6))
 		sparkSession.createDataFrame(res, schema)
-	}
-	
-	def readAllAdData(sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): sql.DataFrame = {
-		val schema = StructType(List(
-			StructField("creative_id", StringType), StructField("ad_id", StringType), StructField("product_id", StringType),
-			StructField("product_category", StringType), StructField("advertiser_id", StringType), StructField("industry", StringType)
-		))
-		//		val train_ad_data = sparkSession.read.schema(schema).format("csv").option("header", "true")
-		//			.load(dataPath + "/train_preliminary/ad.csv")
-		//		println("train_ad_data count=", train_ad_data.count())  //2481136L
-		//		train_ad_data.show(false)
-		//
-		//		val test_ad_data = sparkSession.read.schema(schema).format("csv").option("header", "true").load(dataPath + "/test/ad.csv")
-		//		println("test_ad_data count=", test_ad_data.count())  //2618160L
-		//		test_ad_data.show(false)
-		//
-		//		// creative_id, ad_id, product_id, product_category, advertiser_id, industry
-		//		val all_ad_data = train_ad_data.union(test_ad_data).repartition(numPartitions)
-		//			.na.fill(Map("ad_id" -> 4000000, "product_id" -> 60000, "product_category" -> 30,
-		//			"advertiser_id" -> 63000, "industry" -> 400)).distinct()
-		val value_map = Map("ad_id" -> "4000000", "product_id" -> "60000", "product_category" -> "30",
-			"advertiser_id" -> "63000", "industry" -> "400")
-		val all_ad_data = sparkSession.read.schema(schema).format("csv").option("header", true)
-			.load(dataPath + "/all_ad.csv").repartition(numPartitions).rdd
-			.map(p => (p.getAs[String]("creative_id"), p.getAs[String]("ad_id"), p.getAs[String]("product_id"),
-				p.getAs[String]("product_category"), p.getAs[String]("advertiser_id"), p.getAs[String]("industry")))
-			.map(p => (p._1, if (p._2 == "\\N") "4000000" else p._2,
-				if (p._3 == "\\N") "60000" else p._3,
-				if (p._4 == "\\N") "30" else p._4,
-				if (p._5 == "\\N") "63000" else p._5,
-				if (p._6 == "\\N") "400" else p._6)).map(p => Row(p._1.toInt, p._2.toInt, p._3.toInt, p._4.toInt, p._5.toInt, p._6.toInt))
-		val new_schema = StructType(List(
-			StructField("creative_id", IntegerType), StructField("ad_id", IntegerType), StructField("product_id", IntegerType),
-			StructField("product_category", IntegerType), StructField("advertiser_id", IntegerType), StructField("industry", IntegerType)
-		))
-		val res = sparkSession.createDataFrame(all_ad_data, new_schema)
-		
-		println("all ad count=", all_ad_data.count()) // 3412772
-		println("all Ad data")
-		res.show(false)
-		res
 	}
 	
 	def adTrainFeatureProcess(train_click_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, numPartitions: Int): Unit = {
