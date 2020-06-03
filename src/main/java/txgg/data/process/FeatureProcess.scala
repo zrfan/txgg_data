@@ -50,6 +50,7 @@ object FeatureProcess {
 			.repartition(numPartitions)
 			.persist(StorageLevel.MEMORY_AND_DISK)
 		all_click_data.unpersist()
+		all_ad_data.unpersist()
 		println("full click data after join")
 		full_click_data.show(50, false)
 		if (func_name == "newuserlist"){
@@ -209,7 +210,6 @@ object FeatureProcess {
 				val user_window_agg = window_res.groupBy("user_id")
 				val user_res = user_window_agg.agg(mean(feature_name+"_window"+window+"_nunique").as(feature_name+"_window"+window+"_nunique_avg"))
 				user_res.show(20, false)
-				
 			}
 		}
 		
@@ -421,6 +421,9 @@ object FeatureProcess {
 				}else{
 					val interest = time_ad_list.map(x => (x(i), x(7).toInt)).groupBy(_._1).mapValues(seq => seq.reduce { (x, y) => (x._1, x._2 + y._2) })
 					interest_list = interest.mapValues(seq => seq._1+"#"+seq._2.toString).values.toArray
+				}
+				if (interest_list.length > 64){  // 超过64长度的截断，保留最后 的64次点击
+					interest_list = interest_list.slice(interest_list.length-64, interest_list.length)
 				}
 				val cnt = interest_list.length
 				// 第一位是seq长度，之后是id+'#'+点击次数
