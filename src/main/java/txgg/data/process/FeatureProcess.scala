@@ -221,7 +221,8 @@ object FeatureProcess {
 			.map(p => (p.getAs[String]("time"), p.getAs[String]("user_id"),
 				p.getAs[String]("creative_id"), p.getAs[String]("click_times"),
 				p.getAs[String]("age"), p.getAs[String]("gender")))
-		train_click.take(50).foreach(p => println("train click data=", p.toString()))
+		train_click.take(50).foreach(p => println("train click data=", "time=",p._1, "user_id=", p._2,
+			"creative_id=", p._3, "click_times=", p._4, "age=", p._5, "gender=", p._6))
 		
 		val test_click_data = sparkSession.read.schema(click_schema).format("csv").option("header", true)
 			.load(dataPath + "/test/click_log.csv").repartition(numPartitions)
@@ -229,16 +230,17 @@ object FeatureProcess {
 			.map(p => (p.getAs[String]("time"), p.getAs[String]("user_id"),
 				p.getAs[String]("creative_id"), p.getAs[String]("click_times"),
 				p.getAs[String]("age"), p.getAs[String]("gender")))
-		println("test click data")
-		test_click_data.take(10).foreach(p => println("test click data=", p.toString()))
+		test_click_data.take(50).foreach(p => println("test click data=", "time=",p._1, "user_id=", p._2,
+			"creative_id=", p._3, "click_times=", p._4, "age=", p._5, "gender=", p._6))
 		
 		val all_click_data = train_click.union(test_click_data).repartition(numPartitions)
-			.map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6))
 		
-		all_click_data.take(50).foreach(p => println("all click data=", p.toString()))
+		all_click_data.take(50).foreach(p => println("all click data=", "time=",p._1, "user_id=", p._2,
+			"creative_id=", p._3, "click_times=", p._4, "age=", p._5, "gender=", p._6))
 		
 		println("all click count=", all_click_data.count()) // 63668283
-		sparkSession.createDataFrame(all_click_data, schema)
+		val res = all_click_data.map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6))
+		sparkSession.createDataFrame(res, schema)
 	}
 	
 	def readAllAdData(sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): sql.DataFrame = {
