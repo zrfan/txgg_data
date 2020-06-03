@@ -207,28 +207,38 @@ object FeatureProcess {
 		val user_schema = StructType(List(
 			StructField("user_id", IntegerType), StructField("age", IntegerType), StructField("gender", IntegerType)
 		))
+		val schema = StructType(List(
+			StructField("time", IntegerType), StructField("user_id", IntegerType), StructField("creative_id", IntegerType),
+			StructField("click_times", IntegerType), StructField("age", IntegerType), StructField("gender", IntegerType)
+		))
 		
 		val train_click_data = sparkSession.read.schema(click_schema).format("csv").option("header", true)
 			.load(dataPath + "/train_preliminary/click_log.csv")
 		val user_data = sparkSession.read.schema(user_schema).format("csv").option("header", true)
 			.load(dataPath + "/train_preliminary/user.csv").repartition(numPartitions)
 		
-		val train_click = train_click_data.join(user_data, usingColumn = "user_id")
-		train_click_data.take(50).foreach(p => println("train click data=", p.mkString("; ")))
+		val train_click = train_click_data.join(user_data, usingColumn = "user_id").rdd
+			.map(p => (p.getAs[String]("time"), p.getAs[String]("user_id"),
+				p.getAs[String]("creative_id"), p.getAs[String]("click_times"),
+				p.getAs[String]("age"), p.getAs[String]("gender")))
+		train_click.take(50).foreach(p => println("train click data=", p.toString()))
 		
 		val test_click_data = sparkSession.read.schema(click_schema).format("csv").option("header", true)
 			.load(dataPath + "/test/click_log.csv").repartition(numPartitions)
-			.withColumn("age", lit(0)).withColumn("gender", lit(0))
+			.withColumn("age", lit(0)).withColumn("gender", lit(0)).rdd
+			.map(p => (p.getAs[String]("time"), p.getAs[String]("user_id"),
+				p.getAs[String]("creative_id"), p.getAs[String]("click_times"),
+				p.getAs[String]("age"), p.getAs[String]("gender")))
 		println("test click data")
 		test_click_data.take(10).foreach(p => println("test click data=", p.toString()))
 		
 		val all_click_data = train_click.union(test_click_data).repartition(numPartitions)
 		
-		val click_user_data = all_click_data
-		println("all click data")
-		click_user_data.show(50, false)
-		println("all click count=", click_user_data.count())
-		click_user_data
+		all_click_data.take(50).foreach(p => println("all click data=", p.toString()))
+		
+		println("all click count=", all_click_data.count())
+//		sparkSession.createDataFrame(all_click_data, schema)
+		train_click_data
 	}
 	
 	def readAllAdData(sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): sql.DataFrame = {
