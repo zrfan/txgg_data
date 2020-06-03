@@ -52,11 +52,11 @@ object FeatureProcess {
 		all_click_data.unpersist()
 		println("full click data after join")
 		full_click_data.show(50, false)
-		if (func_name == "newuserlist"){
-			newUserList(full_click_data, sparkSession, numPartitions, savePath)
-		}else if (func_name == "featuretest"){
-			featureTest(full_click_data, sparkSession, dataPath, savePath, numPartitions)
-		}
+//		if (func_name == "newuserlist"){
+//			newUserList(full_click_data, sparkSession, numPartitions, savePath)
+//		}else if (func_name == "featuretest"){
+//			featureTest(full_click_data, sparkSession, dataPath, savePath, numPartitions)
+//		}
 	}
 	
 	def featureTest(full_click_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): Unit ={
