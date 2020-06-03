@@ -68,7 +68,8 @@ object FeatureProcess {
 		val all_feature_cols = Array("all_click_cnt", "active_days", "active_avg_clicks",
 			"creative_cnt", "ad_cnt", "product_cnt", "category_cnt", "advertiser_cnt", "industry_cnt",
 			"mean_dur", "max_dur", "min_dur", "mean_dur2", "max_dur2", "min_dur2", "stdev", "variance", "popStdev", "sampleStdev", "popVariance", "sampleVariance",
-			"max_click_product_id", "max_click_product_category", "max_click_advertiser_id", "max_click_industry")
+			"max_click_product_id", "max_click_product_category", "max_click_advertiser_id", "max_click_industry",
+			"window3_click_times_avg")
 		
 		val all_data = user_feature.select((all_feature_cols ++ Array("user_id", "age", "gender")).map(x => col(x)): _*)
 		println("all_data")
@@ -182,7 +183,7 @@ object FeatureProcess {
 			user_agg = user_agg.join(user_max_product, usingColumn = "user_id")
 		}
 		// 窗口特征统计
-		val window_scope = Array(3, 5, 7, 15, 30)
+		val window_scope = Array(3, 5, 7)
 		
 		for (window <- window_scope) {
 			val time_udf = udf((time: Int) => {
@@ -191,17 +192,24 @@ object FeatureProcess {
 			var window_df = full_click_data.withColumn("window_num_" + window.toString, time_udf(col("time")))
 			println("window_num=", window)
 			window_df.show(false)
+			
+			val window_agg = window_df.groupBy("user_id", "window_num_" + window.toString)
+			val click_times = window_agg.agg(sum("click_times").as("window"+window+"_click_times"))
+			val window_mean_click = click_times.groupBy("user_id")
+				.agg(mean("window"+window+"_click_times").as("window"+window+"_click_times_avg"))
+			window_mean_click.show(20, false)
+			user_agg = user_agg.join(window_mean_click, usingColumn = "user_id")
+			
 			val feature_names = Array("creative_id", "ad_id", "product_id", "product_category", "advertiser_id", "industry")
 			for (feature_name <- feature_names) {
-				val window_agg = window_df.groupBy("user_id", "window_num_" + window.toString)
-				val window_res = window_agg.agg(sum("click_times").as(feature_name+"_window"+window+"click_times"),
+				val window_res = window_agg.agg(sum("click_times").as(feature_name+"_window"+window+"_click_times"),
 					approx_count_distinct(feature_name).as(feature_name+"_window"+window+"_nunique"))
 				println("window_agg=", feature_name, " window_num="+window.toString)
 				window_res.show(20, false)
 				val user_window_agg = window_res.groupBy("user_id")
-				val user_res = user_window_agg.agg(mean(feature_name+"_window"+window+"click_times").as(feature_name+"_window"+window+"click_times_avg"),
-					mean(feature_name+"_window"+window+"_nunique").as(feature_name+"_window"+window+"_nunique_avg"))
+				val user_res = user_window_agg.agg(mean(feature_name+"_window"+window+"_nunique").as(feature_name+"_window"+window+"_nunique_avg"))
 				user_res.show(20, false)
+				
 			}
 		}
 		
