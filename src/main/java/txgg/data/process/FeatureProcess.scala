@@ -223,23 +223,23 @@ object FeatureProcess {
 		}
 		user_agg
 		// 窗口特征统计 , 3, 5, 7, 15, 30
-		val window_scope = Array(7, 30)
+		val window_scope = Array(7)
 		
-//		for (window <- window_scope) {
-//			val time_udf = udf((time: Int) => {
-//				math.floor((time - 1) / window)
-//			})
-//			var window_df = full_click_data.withColumn("window_num_" + window.toString, time_udf(col("time")))
-//			println("window_num=", window)
-//			window_df.show(false)
-//
-//			val window_agg = window_df.groupBy("user_id", "window_num_" + window.toString)
-//			val click_times = window_agg.agg(sum("click_times").as("window"+window+"_click_times"))
-//			val window_mean_click = click_times.groupBy("user_id")
-//				.agg(mean("window"+window+"_click_times").as("window"+window+"_click_times_avg"))
-//			window_mean_click.show(20, false)
-//			user_agg = user_agg.join(window_mean_click, usingColumn = "user_id")
-//
+		for (window <- window_scope) {
+			val time_udf = udf((time: Int) => {
+				math.floor((time - 1) / window)
+			})
+			var window_df = full_click_data.withColumn("window_num_" + window.toString, time_udf(col("time")))
+			println("window_num=", window)
+			window_df.show(false)
+
+			val window_agg = window_df.groupBy("user_id", "window_num_" + window.toString)
+			val click_times = window_agg.agg(sum("click_times").as("window"+window+"_click_times"))
+			val window_mean_click = click_times.groupBy("user_id")
+				.agg(mean("window"+window+"_click_times").as("window"+window+"_click_times_avg"))
+			window_mean_click.show(20, false)
+			user_agg = user_agg.join(window_mean_click, usingColumn = "user_id")
+
 //			val feature_names = Array("creative_id", "ad_id", "product_id", "product_category", "advertiser_id", "industry")
 //			for (feature_name <- feature_names) {
 //				val window_res = window_agg.agg(approx_count_distinct(feature_name).as(feature_name+"_window"+window+"_nunique"))
@@ -249,7 +249,7 @@ object FeatureProcess {
 //				val user_res = user_window_agg.agg(mean(feature_name+"_window"+window+"_nunique").as(feature_name+"_window"+window+"_nunique_avg"))
 //				user_res.show(20, false)
 //			}
-//		}
+		}
 		
 		user_agg
 	}
