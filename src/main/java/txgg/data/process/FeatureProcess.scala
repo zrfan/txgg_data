@@ -447,9 +447,17 @@ object FeatureProcess {
 		predict_ad_df.repartition(2).write.format("tfrecords").option("recordType", "Example")
 			.mode("overwrite").save(savePath + s"/txpredict.tfrecords")
 		
+		
 		val all_train_data = data.filter(p => (p._2.toInt > 0 && p._3.toInt > 0))
 			.map(p => Row(Array(p._1, p._2, p._3), p._4)).persist(StorageLevel.MEMORY_AND_DISK) // user_id&label, ad_seq
 		val all_train_df = sparkSession.createDataFrame(all_train_data, schema)
+		// 单折数据
+		val one_splits = all_train_df.randomSplit(Array(0.9, 0.1), seed = 2020L)
+		one_splits(0).repartition(1).write.format("tfrecords").option("recordType", "Example")
+			.mode("overwrite").save(savePath + s"/one_s/txtrain.tfrecords")
+		one_splits(1).repartition(1).write.format("tfrecords").option("recordType", "Example")
+			.mode("overwrite").save(savePath + s"/one_s/txtest.tfrecords")
+		// K 折数据
 		val splits = all_train_df.randomSplit(Array(0.2, 0.2, 0.2, 0.2, 0.2), seed = 2020L)
 		data.unpersist()
 		for (k <- Array.range(0, splits.length)){
