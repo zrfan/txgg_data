@@ -115,10 +115,12 @@ object FeatureProcess {
 		val assembler = new VectorAssembler().setInputCols(all_feature_cols).setOutputCol("features")
 		val all_assembled_data = assembler.transform(all_data)
 		println("assembled")
-		all_assembled_data.show(false)
+		
 		val all_train = all_assembled_data.filter("age!=0 and gender!=0")
+			.select((Array("features") ++ Array("user_id", "age", "gender")).map(x => col(x)): _*)
 			.withColumn("label_gender", user_feature("gender") * 1.0 - 1.0)
 			.withColumn("label_age", user_feature("age") * 1.0 - 1.0)
+		all_assembled_data.show(false)
 		val Array(train, test) = all_train.randomSplit(Array(0.7, 0.3), seed = 2020L)
 		// train gender
 		val lightgbm_gender = new LightGBMClassifier().setLabelCol("label_gender").setFeaturesCol("features")
@@ -138,7 +140,7 @@ object FeatureProcess {
 		val val_age = model_age.transform(test)
 		println("val_age=", val_age.show(false))
 		val evaluator_age = new MulticlassClassificationEvaluator().setLabelCol("label_age").setPredictionCol("predict_age")
-		println("gender evalutor=", evaluator_age.evaluate(val_age))
+		println("age evalutor=", evaluator_age.evaluate(val_age))
 		
 		
 		//predict
