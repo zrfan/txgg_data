@@ -207,6 +207,7 @@ object FeatureProcess {
 		println("test mean dur")
 		user_dur.show(false)
 		user_agg = user_agg.join(user_dur, usingColumn = "user_id")
+		user_agg = user_agg.drop("time_list")
 		// 最大点击特征统计
 		val max_feature_names = Array("product_id", "product_category", "advertiser_id", "industry")
 		for (name <- max_feature_names) {
