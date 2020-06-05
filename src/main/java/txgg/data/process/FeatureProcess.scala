@@ -409,14 +409,21 @@ object FeatureProcess {
                     cast(advertiser_id as string), cast(industry as string), cast(click_times as string))) as seq
             from (select * from txgg_temp order by user_id,time) as A
             group by A.user_id,A.age,A.gender""".stripMargin
-		def getUserSeq(list: Array[String]): Array[String] ={
+		def getUserSeq(list: Array[String]): (Array[String], Array[String]) ={
 			// time, creative_id, ad_id, product_id, product_category, advertiser_id, industry, click_times
 			val time_ad_list = list.map(x => x.split("#"))
 			var res:Array[String] = Array[String]()
+			var creative_list : Array[String] = Array[String]()
 			for (i <- Array.range(1, 7)){
 				var interest_list: Array[String] = null
 				if (i<3){  // creative_id, ad_id
 					interest_list = time_ad_list.map(x => (x(i) + "#" + x(7)))
+					if ( i== 1){
+						creative_list = time_ad_list.map(x => x(i))
+						if (creative_list.length>64){
+							creative_list = creative_list.slice(creative_list.length-64, creative_list.length)
+						}
+					}
 				}else{
 					val interest = time_ad_list.map(x => (x(i), x(7).toInt)).groupBy(_._1).mapValues(seq => seq.reduce { (x, y) => (x._1, x._2 + y._2) })
 					interest_list = interest.mapValues(seq => seq._1+"#"+seq._2.toString).values.toArray
@@ -429,17 +436,49 @@ object FeatureProcess {
 				val str = cnt.toString + ";" + interest_list.mkString(";")
 				res = res :+ str
 			}
-			res
+			(res, creative_list)
 		}
 		val data = sparkSession.sql(data_sql).rdd.repartition(numPartitions)
 			.map(p => (p(0).asInstanceOf[String], p(1).asInstanceOf[String], p(2).asInstanceOf[String],
 				p(3).asInstanceOf[mutable.WrappedArray[String]].toArray))
 			.map(p => (p._1, p._2, p._3, getUserSeq(p._4)))
-			.map(p => (p._1, p._2, p._3, p._4))
+			.map(p => (p._1, p._2, p._3, p._4._1, p._4._2))
 			.persist(StorageLevel.MEMORY_AND_DISK)
 		val schema = StructType(List(
 			StructField("user_id_label", ArrayType(StringType)), StructField("ad_seq", ArrayType(StringType))
 		))
+		val creative_schema = StructType(List(
+			StructField("user_id", ArrayType(IntegerType)), StructField("age", ArrayType(IntegerType)),
+			StructField("gender", ArrayType(IntegerType)),  StructField("len", ArrayType(IntegerType)),
+			StructField("seq", ArrayType(StringType))
+		
+		))
+		// 保存creative_id序列文件, uid, age, gender, len, seq
+		val creative_data = data.map(p => (p._1.toInt, p._2.toInt, p._3.toInt, p._5.length, p._5.mkString("#")))
+		val creative_predict = creative_data.filter(p => p._2==0 && p._3==0).map(p => Row(p._1, p._2, p._3, p._4, p._5))
+		val creative_predict_df = sparkSession.createDataFrame(creative_predict, creative_schema)
+		creative_predict_df.show(20, false)
+		println("creative predict count=", creative_predict_df.count())
+		creative_predict_df.repartition(1).write.format("tfrecords").option("recordType", "Example")
+			.mode("overwrite").save(savePath + s"/creative/txpredict.tfrecords")
+		creative_predict_df.repartition(1).write.option("timestampFormat", "yyyy/MM/dd HH:mm:ss ZZ")
+			.option("encoding", "utf-8").mode("overwrite")
+			.csv(path = savePath + "/creative/all_predict.csv")
+		// 保存creative train数据
+		val creative_train = creative_data.filter(p => p._2!=0 && p._3!=0).map(p => Row(p._1, p._2, p._3, p._4, p._5))
+		val creative_train_df = sparkSession.createDataFrame(creative_train, creative_schema)
+		creative_train_df.show(20, false)
+		println("creative predict count=", creative_train_df.count())
+		creative_train_df.repartition(1).write.option("timestampFormat", "yyyy/MM/dd HH:mm:ss ZZ")
+			.option("encoding", "utf-8").mode("overwrite")
+			.csv(path = savePath + "/creative/all_train.csv")
+		val creative_one_splits = creative_train_df.randomSplit(Array(0.9, 0.1), seed = 2020L)
+		
+		creative_one_splits(0).repartition(1).write.format("tfrecords").option("recordType", "Example")
+			.mode("overwrite").save(savePath + s"/creative/txtrain.tfrecords")
+		creative_one_splits(1).repartition(1).write.format("tfrecords").option("recordType", "Example")
+			.mode("overwrite").save(savePath + s"/creative/txtest.tfrecords")
+		
 		/////	  predict 先写出内存
 		val predict_ad_data = data.filter(p => (p._2.toInt == 0 && p._3.toInt == 0))
 			.map(p => Row(Array(p._1, p._2, p._3), p._4)) // user_id&label, ad_seq
