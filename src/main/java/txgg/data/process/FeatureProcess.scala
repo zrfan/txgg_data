@@ -448,9 +448,9 @@ object FeatureProcess {
 			StructField("user_id_label", ArrayType(StringType)), StructField("ad_seq", ArrayType(StringType))
 		))
 		val creative_schema = StructType(List(
-			StructField("user_id", ArrayType(IntegerType)), StructField("age", ArrayType(IntegerType)),
-			StructField("gender", ArrayType(IntegerType)),  StructField("len", ArrayType(IntegerType)),
-			StructField("seq", ArrayType(StringType))
+			StructField("user_id", IntegerType), StructField("age", IntegerType),
+			StructField("gender", IntegerType),  StructField("len", IntegerType),
+			StructField("seq", StringType)
 		
 		))
 		// 保存creative_id序列文件, uid, age, gender, len, seq
