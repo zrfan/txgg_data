@@ -40,59 +40,33 @@ object FeatureProcess {
 			newUserList(full_click_data, sparkSession, numPartitions, savePath)
 		}else if (func_name == "featuretest"){
 			featureTest(full_click_data, sparkSession, dataPath, savePath, numPartitions)
+		}else if(func_name == "makeadlist"){
+			makeAdList(full_click_data, sparkSession, "creative_id", numPartitions, savePath)
 		}
 	}
-	def getFullClickData(sparkSession: SparkSession, numPartitions: Int, dataPath: String, savePath: String): Dataset[Row] ={
-		val full_click_filename = dataPath+"/cleaned/full_click_ad.csv"
-		val full_click_file = new File(full_click_filename)
-		if (!full_click_file.exists){
-			// 读广告数据
-			val schema = StructType(List(
-				StructField("creative_id", StringType), StructField("ad_id", StringType), StructField("product_id", StringType),
-				StructField("product_category", StringType), StructField("advertiser_id", StringType), StructField("industry", StringType)
-			))
-			val value_map = Map("ad_id" -> "4000000", "product_id" -> "60000", "product_category" -> "30",
-				"advertiser_id" -> "63000", "industry" -> "400")
-			val all_ad_data = sparkSession.read.schema(schema).format("csv").option("header", true)
-				.load(dataPath + "/all_ad.csv").repartition(numPartitions).rdd
-				.map(p => (p.getAs[String]("creative_id"), p.getAs[String]("ad_id"), p.getAs[String]("product_id"),
-					p.getAs[String]("product_category"), p.getAs[String]("advertiser_id"), p.getAs[String]("industry")))
-				.map(p => (p._1, if (p._2 == "\\N") "4000000" else p._2,
-					if (p._3 == "\\N") "60000" else p._3,
-					if (p._4 == "\\N") "30" else p._4,
-					if (p._5 == "\\N") "63000" else p._5,
-					if (p._6 == "\\N") "400" else p._6)).map(p => Row(p._1.toInt, p._2.toInt, p._3.toInt, p._4.toInt, p._5.toInt, p._6.toInt))
-			val new_schema = StructType(List(
-				StructField("creative_id", IntegerType), StructField("ad_id", IntegerType), StructField("product_id", IntegerType),
-				StructField("product_category", IntegerType), StructField("advertiser_id", IntegerType), StructField("industry", IntegerType)
-			))
-			val all_ad_df = sparkSession.createDataFrame(all_ad_data, new_schema)
-			println("all_ad data=")
-			all_ad_df.show(50, false) // 去重后广告数3412773
-			println("all_ad_data count=", all_ad_df.count())
-			//  读点击数据
-			val all_click_data = readAllClickData(sparkSession, dataPath, savePath, numPartitions) // user click age&gender
-			println("all_click_data count=", all_click_data.count())
-			
-			val full_click_data = all_click_data.join(all_ad_df, usingColumns = Seq("creative_id"), joinType = "left_outer")
-				.repartition(numPartitions)
-			// 保存文件
-			full_click_data.repartition(1).write.option("header", true).option("sep", ",").csv(full_click_filename)
-			full_click_data
-		}else{
-			println("exist full click data")
-			val schema = StructType(List(
-				StructField("creative_id", IntegerType), StructField("time", IntegerType), StructField("user_id", IntegerType),
-				StructField("click_times", IntegerType), StructField("age", IntegerType), StructField("gender", IntegerType),
-				StructField("ad_id", IntegerType), StructField("product_id", IntegerType), StructField("product_category", IntegerType),
-				StructField("advertiser_id", IntegerType), StructField("industry", IntegerType)
-			))
-			val full_click_data = sparkSession.read.schema(schema).format("csv").option("header", true).option("sep", ",")  //.schema(schema)
-				.load(full_click_filename).repartition(numPartitions)
-			println("full_click_data")
-			full_click_data.show(50, false)
-			full_click_data
-		}
+	def makeAdList(full_click_data: Dataset[Row], sparkSession: SparkSession, make_field: String, numPartitions: Int, savePath: String): Unit = {
+		println("start make "+make_field+" list")
+		full_click_data.createTempView("txgg_temp")
+		val schema = StructType(List(
+			StructField("user_id", StringType), StructField("content_list", StringType)
+		))
+		val schema2 = StructType(List(StructField("content_list", StringType)))
+		val data_sql =
+			s"""select A.user_id, collect_list($make_field) as seq
+			   | from (select * from txgg_temp order by user_id,time) as A
+			   | group by A.user_id""".stripMargin
+		println("data_sql=", data_sql)
+		val creative_data = sparkSession.sql(data_sql).repartition(numPartitions)
+		//            .persist(StorageLevel.MEMORY_AND_DISK)
+		//        creative_data.repartition(2).write.format("tfrecords").option("recordType", "Example")
+		//            .mode("overwrite").save(dataPath + s"/txtest.tfrecords")
+		val csv_data = creative_data.rdd.map(p => (p(0).asInstanceOf[String], p(1).asInstanceOf[mutable.WrappedArray[String]].toArray))
+			.map(p => Row(p._1, p._2.mkString("#")))
+		val csv_df = sparkSession.createDataFrame(csv_data, schema)
+		
+		csv_df.repartition(1).write.option("timestampFormat", "yyyy/MM/dd HH:mm:ss ZZ")
+			.option("encoding", "utf-8").mode("overwrite")
+			.csv(path = savePath + "user_" + make_field +"_list.csv")
 	}
 	
 	def featureTest(full_click_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): Unit ={
@@ -399,6 +373,59 @@ object FeatureProcess {
 		}
 		res
 	}
+	def getFullClickData(sparkSession: SparkSession, numPartitions: Int, dataPath: String, savePath: String): Dataset[Row] ={
+		val full_click_filename = dataPath+"/cleaned/full_click_ad.csv"
+		val full_click_file = new File(full_click_filename)
+		if (!full_click_file.exists){
+			// 读广告数据
+			val schema = StructType(List(
+				StructField("creative_id", StringType), StructField("ad_id", StringType), StructField("product_id", StringType),
+				StructField("product_category", StringType), StructField("advertiser_id", StringType), StructField("industry", StringType)
+			))
+			val value_map = Map("ad_id" -> "4000000", "product_id" -> "60000", "product_category" -> "30",
+				"advertiser_id" -> "63000", "industry" -> "400")
+			val all_ad_data = sparkSession.read.schema(schema).format("csv").option("header", true)
+				.load(dataPath + "/all_ad.csv").repartition(numPartitions).rdd
+				.map(p => (p.getAs[String]("creative_id"), p.getAs[String]("ad_id"), p.getAs[String]("product_id"),
+					p.getAs[String]("product_category"), p.getAs[String]("advertiser_id"), p.getAs[String]("industry")))
+				.map(p => (p._1, if (p._2 == "\\N") "4000000" else p._2,
+					if (p._3 == "\\N") "60000" else p._3,
+					if (p._4 == "\\N") "30" else p._4,
+					if (p._5 == "\\N") "63000" else p._5,
+					if (p._6 == "\\N") "400" else p._6)).map(p => Row(p._1.toInt, p._2.toInt, p._3.toInt, p._4.toInt, p._5.toInt, p._6.toInt))
+			val new_schema = StructType(List(
+				StructField("creative_id", IntegerType), StructField("ad_id", IntegerType), StructField("product_id", IntegerType),
+				StructField("product_category", IntegerType), StructField("advertiser_id", IntegerType), StructField("industry", IntegerType)
+			))
+			val all_ad_df = sparkSession.createDataFrame(all_ad_data, new_schema)
+			println("all_ad data=")
+			all_ad_df.show(50, false) // 去重后广告数3412773
+			println("all_ad_data count=", all_ad_df.count())
+			//  读点击数据
+			val all_click_data = readAllClickData(sparkSession, dataPath, savePath, numPartitions) // user click age&gender
+			println("all_click_data count=", all_click_data.count())
+			
+			val full_click_data = all_click_data.join(all_ad_df, usingColumns = Seq("creative_id"), joinType = "left_outer")
+				.repartition(numPartitions)
+			// 保存文件
+			full_click_data.repartition(1).write.option("header", true).option("sep", ",").csv(full_click_filename)
+			full_click_data
+		}else{
+			println("exist full click data")
+			val schema = StructType(List(
+				StructField("creative_id", IntegerType), StructField("time", IntegerType), StructField("user_id", IntegerType),
+				StructField("click_times", IntegerType), StructField("age", IntegerType), StructField("gender", IntegerType),
+				StructField("ad_id", IntegerType), StructField("product_id", IntegerType), StructField("product_category", IntegerType),
+				StructField("advertiser_id", IntegerType), StructField("industry", IntegerType)
+			))
+			val full_click_data = sparkSession.read.schema(schema).format("csv").option("header", true).option("sep", ",")  //.schema(schema)
+				.load(full_click_filename).repartition(numPartitions)
+			println("full_click_data")
+			full_click_data.show(50, false)
+			full_click_data
+		}
+	}
+	
 	
 	def newUserList(full_click_data: Dataset[Row], sparkSession: SparkSession, numPartitions: Int, savePath: String): Unit ={
 		full_click_data.createTempView("txgg_temp")
