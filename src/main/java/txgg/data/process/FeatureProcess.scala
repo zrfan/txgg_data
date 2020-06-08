@@ -29,8 +29,8 @@ object FeatureProcess {
 		val sparkConf = sparkContext.getConf
 		val sqlContext = new SQLContext(sparkContext)
 		val numPartitions = 560
-		val dataPath = "/home/fzr/txgg/data/origin/"
-		val savePath = "/home/fzr/txgg/data/processed/"
+		val dataPath = "/disk1/fzr/txgg/data/origin/"
+		val savePath = "/disk1/fzr/txgg/data/processed/"
 		println("dataPath=", dataPath)
 		println("funcname=", func_name)
 		
