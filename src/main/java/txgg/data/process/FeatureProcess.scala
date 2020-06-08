@@ -48,7 +48,7 @@ object FeatureProcess {
 		println("start make "+make_field+" list")
 		full_click_data.createTempView("txgg_temp")
 		val schema = StructType(List(
-			StructField("user_id", StringType), StructField("content_list", StringType)
+			StructField("user_id", IntegerType), StructField("content_list", StringType)
 		))
 		val schema2 = StructType(List(StructField("content_list", StringType)))
 		val data_sql =
@@ -60,7 +60,7 @@ object FeatureProcess {
 		//            .persist(StorageLevel.MEMORY_AND_DISK)
 		//        creative_data.repartition(2).write.format("tfrecords").option("recordType", "Example")
 		//            .mode("overwrite").save(dataPath + s"/txtest.tfrecords")
-		val csv_data = creative_data.rdd.map(p => (p(0).asInstanceOf[String], p(1).asInstanceOf[mutable.WrappedArray[String]].toArray))
+		val csv_data = creative_data.rdd.map(p => (p(0).asInstanceOf[Integer], p(1).asInstanceOf[mutable.WrappedArray[Integer]].toArray))
 			.map(p => Row(p._1, p._2.mkString("#")))
 		val csv_df = sparkSession.createDataFrame(csv_data, schema)
 		
