@@ -42,7 +42,7 @@ object FeatureProcess {
 			featureTest(full_click_data, sparkSession, dataPath, savePath, numPartitions)
 		}else if(func_name == "makeadlist"){
 			makeAdList(full_click_data, sparkSession, Array("creative_id", "ad_id", "product_id", "product_category", "advertiser_id", "industry"),
-				numPartitions, savePath)
+				numPartitions, savePath+"/adlist/")
 		}
 	}
 	def makeAdList(full_click_data: Dataset[Row], sparkSession: SparkSession, make_field: Array[String], numPartitions: Int, savePath: String): Unit = {
@@ -64,7 +64,7 @@ object FeatureProcess {
 			
 			csv_df.repartition(1).write.option("timestampFormat", "yyyy/MM/dd HH:mm:ss ZZ")
 				.option("encoding", "utf-8").mode("overwrite")
-				.csv(path = savePath + "user_" + make_field +"_list.csv")
+				.csv(path = savePath + "user_" + field +"_list.csv")
 		}
 		
 	}
@@ -436,40 +436,25 @@ object FeatureProcess {
                     cast(advertiser_id as string), cast(industry as string), cast(click_times as string))) as seq
             from (select * from txgg_temp order by user_id,time) as A
             group by A.user_id,A.age,A.gender""".stripMargin
-		def getUserSeq(list: Array[String]): (Array[String], Array[String]) ={
+		def getUserSeq(list: Array[String]): Array[Array[String]] ={
 			// time, creative_id, ad_id, product_id, product_category, advertiser_id, industry, click_times
 			val time_ad_list = list.map(x => x.split("#"))
-			var res:Array[String] = Array[String]()
-			var creative_list : Array[String] = Array[String]()
+			var res:Array[Array[String]] = Array[Array[String]]()
 			for (i <- Array.range(1, 7)){
 				var interest_list: Array[String] = null
-				if (i<3){  // creative_id, ad_id
-					interest_list = time_ad_list.map(x => (x(i) + "#" + x(7)))
-					if ( i== 1){
-						creative_list = time_ad_list.map(x => x(i))
-						if (creative_list.length>64){
-							creative_list = creative_list.slice(creative_list.length-64, creative_list.length)
-						}
-					}
-				}else{
-					val interest = time_ad_list.map(x => (x(i), x(7).toInt)).groupBy(_._1).mapValues(seq => seq.reduce { (x, y) => (x._1, x._2 + y._2) })
-					interest_list = interest.mapValues(seq => seq._1+"#"+seq._2.toString).values.toArray
-				}
-				if (interest_list.length > 64){  // 超过64长度的截断，保留最后 的64次点击
+				interest_list = time_ad_list.map(x => x(i))
+				if (interest_list.length > 64){
 					interest_list = interest_list.slice(interest_list.length-64, interest_list.length)
 				}
-				val cnt = interest_list.length
-				// 第一位是seq长度，之后是id+'#'+点击次数
-				val str = cnt.toString + ";" + interest_list.mkString(";")
-				res = res :+ str
+				res = res :+ interest_list
 			}
-			(res, creative_list)
+			res
 		}
 		val data = sparkSession.sql(data_sql).rdd.repartition(numPartitions)
 			.map(p => (p(0).asInstanceOf[String], p(1).asInstanceOf[String], p(2).asInstanceOf[String],
 				p(3).asInstanceOf[mutable.WrappedArray[String]].toArray))
 			.map(p => (p._1, p._2, p._3, getUserSeq(p._4)))
-			.map(p => (p._1, p._2, p._3, p._4._1, p._4._2))
+			.map(p => (p._1, p._2, p._3, p._4(0), p._4(1), p._4(2), p._4(3), p._4(4), p._4(5)))
 			.persist(StorageLevel.MEMORY_AND_DISK)
 		val schema = StructType(List(
 			StructField("user_id_label", ArrayType(StringType)), StructField("ad_seq", ArrayType(StringType))
@@ -477,11 +462,13 @@ object FeatureProcess {
 		val creative_schema = StructType(List(
 			StructField("user_id", IntegerType), StructField("age", IntegerType),
 			StructField("gender", IntegerType),  StructField("len", IntegerType),
-			StructField("seq", StringType)
-		
+			StructField("creative_id", StringType), StructField("ad_id", StringType),
+			StructField("creative_id", StringType), StructField("creative_id", StringType),
+			StructField("creative_id", StringType)
 		))
 		// 保存creative_id序列文件, uid, age, gender, len, seq
 		val creative_data = data.map(p => (p._1.toInt, p._2.toInt, p._3.toInt, p._5.length, p._5.mkString("#")))
+		// 保存creative predict数据
 		val creative_predict = creative_data.filter(p => p._2==0 && p._3==0).map(p => Row(p._1, p._2, p._3, p._4, p._5))
 		val creative_predict_df = sparkSession.createDataFrame(creative_predict, creative_schema)
 		creative_predict_df.show(20, false)
