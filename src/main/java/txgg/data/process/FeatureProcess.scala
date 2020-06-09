@@ -41,32 +41,32 @@ object FeatureProcess {
 		}else if (func_name == "featuretest"){
 			featureTest(full_click_data, sparkSession, dataPath, savePath, numPartitions)
 		}else if(func_name == "makeadlist"){
-			makeAdList(full_click_data, sparkSession, "creative_id", numPartitions, savePath)
+			makeAdList(full_click_data, sparkSession, Array("creative_id", "ad_id", "product_id", "product_category", "advertiser_id", "industry"),
+				numPartitions, savePath)
 		}
 	}
-	def makeAdList(full_click_data: Dataset[Row], sparkSession: SparkSession, make_field: String, numPartitions: Int, savePath: String): Unit = {
-		println("start make "+make_field+" list")
+	def makeAdList(full_click_data: Dataset[Row], sparkSession: SparkSession, make_field: Array[String], numPartitions: Int, savePath: String): Unit = {
+		println("start make "+make_field.mkString(",")+" list")
 		full_click_data.createTempView("txgg_temp")
 		val schema = StructType(List(
 			StructField("user_id", IntegerType), StructField("content_list", StringType)
 		))
-		val schema2 = StructType(List(StructField("content_list", StringType)))
-		val data_sql =
-			s"""select A.user_id, collect_list($make_field) as seq
-			   | from (select * from txgg_temp order by user_id,time) as A
-			   | group by A.user_id""".stripMargin
-		println("data_sql=", data_sql)
-		val creative_data = sparkSession.sql(data_sql).repartition(numPartitions)
-		//            .persist(StorageLevel.MEMORY_AND_DISK)
-		//        creative_data.repartition(2).write.format("tfrecords").option("recordType", "Example")
-		//            .mode("overwrite").save(dataPath + s"/txtest.tfrecords")
-		val csv_data = creative_data.rdd.map(p => (p(0).asInstanceOf[Integer], p(1).asInstanceOf[mutable.WrappedArray[Integer]].toArray))
-			.map(p => Row(p._1, p._2.mkString("#")))
-		val csv_df = sparkSession.createDataFrame(csv_data, schema)
+		for (field <- make_field){
+			val data_sql =
+				s"""select A.user_id, collect_list($field) as seq
+				   | from (select * from txgg_temp order by user_id,time) as A
+				   | group by A.user_id""".stripMargin
+			println("data_sql=", data_sql)
+			val creative_data = sparkSession.sql(data_sql).repartition(numPartitions)
+			val csv_data = creative_data.rdd.map(p => (p(0).asInstanceOf[Integer], p(1).asInstanceOf[mutable.WrappedArray[Integer]].toArray))
+				.map(p => Row(p._1, p._2.mkString("#")))
+			val csv_df = sparkSession.createDataFrame(csv_data, schema)
+			
+			csv_df.repartition(1).write.option("timestampFormat", "yyyy/MM/dd HH:mm:ss ZZ")
+				.option("encoding", "utf-8").mode("overwrite")
+				.csv(path = savePath + "user_" + make_field +"_list.csv")
+		}
 		
-		csv_df.repartition(1).write.option("timestampFormat", "yyyy/MM/dd HH:mm:ss ZZ")
-			.option("encoding", "utf-8").mode("overwrite")
-			.csv(path = savePath + "user_" + make_field +"_list.csv")
 	}
 	
 	def featureTest(full_click_data: Dataset[Row], sparkSession: SparkSession, dataPath: String, savePath: String, numPartitions: Int): Unit ={
