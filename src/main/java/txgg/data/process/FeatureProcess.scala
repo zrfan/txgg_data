@@ -37,7 +37,7 @@ object FeatureProcess {
 		val full_click_data = getFullClickData(sparkSession, numPartitions, dataPath, savePath)
 		
 		if (func_name == "newuserlist"){
-			newUserList(full_click_data, sparkSession, numPartitions, savePath)
+			newUserList(full_click_data, sparkSession, numPartitions, savePath+"/adlist/")
 		}else if (func_name == "featuretest"){
 			featureTest(full_click_data, sparkSession, dataPath, savePath, numPartitions)
 		}else if(func_name == "makeadlist"){
@@ -460,78 +460,77 @@ object FeatureProcess {
 			StructField("user_id_label", ArrayType(StringType)), StructField("ad_seq", ArrayType(StringType))
 		))
 		val creative_schema = StructType(List(
-			StructField("user_id", IntegerType), StructField("age", IntegerType),
-			StructField("gender", IntegerType),  StructField("len", IntegerType),
+			StructField("user_id", IntegerType), StructField("age", IntegerType), StructField("gender", IntegerType),
 			StructField("creative_id", StringType), StructField("ad_id", StringType),
-			StructField("creative_id", StringType), StructField("creative_id", StringType),
-			StructField("creative_id", StringType)
+			StructField("product_id", StringType), StructField("product_category", StringType),
+			StructField("advertiser_id", StringType),StructField("industry", StringType)
 		))
-		// 保存creative_id序列文件, uid, age, gender, len, seq
-		val creative_data = data.map(p => (p._1.toInt, p._2.toInt, p._3.toInt, p._5.length, p._5.mkString("#")))
+		// 保存ad序列文件, uid, age, gender, creative_id, ad_id, product_id, product_category, advertiser_id, industry
+		val adlist_data = data.map(p => (p._1.toInt, p._2.toInt, p._3.toInt, p._4.mkString("#"), p._5.mkString("#"), p._6.mkString("#"), p._7.mkString("#"), p._8.mkString("#"), p._9.mkString("#")))
 		// 保存creative predict数据
-		val creative_predict = creative_data.filter(p => p._2==0 && p._3==0).map(p => Row(p._1, p._2, p._3, p._4, p._5))
-		val creative_predict_df = sparkSession.createDataFrame(creative_predict, creative_schema)
-		creative_predict_df.show(20, false)
-		println("creative predict count=", creative_predict_df.count())
-		creative_predict_df.repartition(1).write.format("tfrecords").option("recordType", "Example")
-			.mode("overwrite").save(savePath + s"/creative/txpredict.tfrecords")
-		creative_predict_df.repartition(1).write.option("timestampFormat", "yyyy/MM/dd HH:mm:ss ZZ")
-			.option("encoding", "utf-8").mode("overwrite")
-			.csv(path = savePath + "/creative/all_predict.csv")
-		// 保存creative train数据
-		val creative_train = creative_data.filter(p => p._2!=0 && p._3!=0).map(p => Row(p._1, p._2, p._3, p._4, p._5))
-		val creative_train_df = sparkSession.createDataFrame(creative_train, creative_schema)
-		creative_train_df.show(20, false)
-		println("creative predict count=", creative_train_df.count())
-		creative_train_df.repartition(1).write.option("timestampFormat", "yyyy/MM/dd HH:mm:ss ZZ")
-			.option("encoding", "utf-8").mode("overwrite")
-			.csv(path = savePath + "/creative/all_train.csv")
-		val creative_one_splits = creative_train_df.randomSplit(Array(0.9, 0.1), seed = 2020L)
-		
-		creative_one_splits(0).repartition(1).write.format("tfrecords").option("recordType", "Example")
-			.mode("overwrite").save(savePath + s"/creative/txtrain.tfrecords")
-		creative_one_splits(1).repartition(1).write.format("tfrecords").option("recordType", "Example")
-			.mode("overwrite").save(savePath + s"/creative/txtest.tfrecords")
-		
-		/////	  predict 先写出内存
-		val predict_ad_data = data.filter(p => (p._2.toInt == 0 && p._3.toInt == 0))
-			.map(p => Row(Array(p._1, p._2, p._3), p._4)) // user_id&label, ad_seq
-		val predict_ad_df = sparkSession.createDataFrame(predict_ad_data, schema)
-		println("predict result")
-		predict_ad_df.show(20, false)
-		println("predict count=", predict_ad_df.count())
-		predict_ad_df.repartition(2).write.format("tfrecords").option("recordType", "Example")
+		val adlist_predict = adlist_data.filter(p => p._2==0 && p._3==0).map(p => Row(p._1, p._2, p._3, p._4, p._5))
+		val adlist_predict_df = sparkSession.createDataFrame(adlist_predict, creative_schema)
+		adlist_predict_df.show(20, false)
+		println("creative predict count=", adlist_predict_df.count())
+		adlist_predict_df.repartition(1).write.format("tfrecords").option("recordType", "Example")
 			.mode("overwrite").save(savePath + s"/txpredict.tfrecords")
+		adlist_predict_df.repartition(1).write.option("timestampFormat", "yyyy/MM/dd HH:mm:ss ZZ")
+			.option("encoding", "utf-8").mode("overwrite")
+			.csv(path = savePath + "/all_predict.csv")
+		// 保存creative train数据
+		val adlist_train = adlist_data.filter(p => p._2!=0 && p._3!=0).map(p => Row(p._1, p._2, p._3, p._4, p._5))
+		val adlist_train_df = sparkSession.createDataFrame(adlist_train, creative_schema)
+		adlist_train_df.show(20, false)
+		println("creative predict count=", adlist_train_df.count())
+		adlist_train_df.repartition(1).write.option("timestampFormat", "yyyy/MM/dd HH:mm:ss ZZ")
+			.option("encoding", "utf-8").mode("overwrite")
+			.csv(path = savePath + "/all_train.csv")
+		val adlist_one_splits = adlist_train_df.randomSplit(Array(0.9, 0.1), seed = 2020L)
 		
+		adlist_one_splits(0).repartition(1).write.format("tfrecords").option("recordType", "Example")
+			.mode("overwrite").save(savePath + s"/txtrain.tfrecords")
+		adlist_one_splits(1).repartition(1).write.format("tfrecords").option("recordType", "Example")
+			.mode("overwrite").save(savePath + s"/txtest.tfrecords")
 		
-		val all_train_data = data.filter(p => (p._2.toInt > 0 && p._3.toInt > 0))
-			.map(p => Row(Array(p._1, p._2, p._3), p._4)).persist(StorageLevel.MEMORY_AND_DISK) // user_id&label, ad_seq
-		val all_train_df = sparkSession.createDataFrame(all_train_data, schema)
-		// 单折数据
-		val one_splits = all_train_df.randomSplit(Array(0.9, 0.1), seed = 2020L)
-		one_splits(0).repartition(1).write.format("tfrecords").option("recordType", "Example")
-			.mode("overwrite").save(savePath + s"/one_s/txtrain.tfrecords")
-		one_splits(1).repartition(1).write.format("tfrecords").option("recordType", "Example")
-			.mode("overwrite").save(savePath + s"/one_s/txtest.tfrecords")
-		// K 折数据
-		val splits = all_train_df.randomSplit(Array(0.2, 0.2, 0.2, 0.2, 0.2), seed = 2020L)
-		data.unpersist()
-		for (k <- Array.range(0, splits.length)){
-			//			splits(k) = splits(k).withColumn("fold", lit(k))
-			println("process_split=", k, "test count=", splits(k).count())
-			splits(k).show(false)
-			splits(k).repartition(1).write.format("tfrecords").option("recordType", "Example")
-				.mode("overwrite").save(savePath + s"/" +  k.toString +"_fold/txtest.tfrecords")
-			var train:Dataset[Row] = null
-			for (j <- Array.range(0, splits.length)){
-				if (j != k){
-					train = if (train == null) splits(j)  else train.union(splits(j))
-				}
-			}
-			println("train count=", train.count())
-			train.show(false)
-			train.repartition(1).write.format("tfrecords").option("recordType", "Example")
-				.mode("overwrite").save(savePath + s"/" +  k.toString +"_fold/txtrain.tfrecords")
-		}
+//		/////	  predict 先写出内存
+//		val predict_ad_data = data.filter(p => (p._2.toInt == 0 && p._3.toInt == 0))
+//			.map(p => Row(Array(p._1, p._2, p._3), p._4)) // user_id&label, ad_seq
+//		val predict_ad_df = sparkSession.createDataFrame(predict_ad_data, schema)
+//		println("predict result")
+//		predict_ad_df.show(20, false)
+//		println("predict count=", predict_ad_df.count())
+//		predict_ad_df.repartition(2).write.format("tfrecords").option("recordType", "Example")
+//			.mode("overwrite").save(savePath + s"/txpredict.tfrecords")
+//
+//
+//		val all_train_data = data.filter(p => (p._2.toInt > 0 && p._3.toInt > 0))
+//			.map(p => Row(Array(p._1, p._2, p._3), p._4)).persist(StorageLevel.MEMORY_AND_DISK) // user_id&label, ad_seq
+//		val all_train_df = sparkSession.createDataFrame(all_train_data, schema)
+//		// 单折数据
+//		val one_splits = all_train_df.randomSplit(Array(0.9, 0.1), seed = 2020L)
+//		one_splits(0).repartition(1).write.format("tfrecords").option("recordType", "Example")
+//			.mode("overwrite").save(savePath + s"/one_s/txtrain.tfrecords")
+//		one_splits(1).repartition(1).write.format("tfrecords").option("recordType", "Example")
+//			.mode("overwrite").save(savePath + s"/one_s/txtest.tfrecords")
+//		// K 折数据
+//		val splits = all_train_df.randomSplit(Array(0.2, 0.2, 0.2, 0.2, 0.2), seed = 2020L)
+//		data.unpersist()
+//		for (k <- Array.range(0, splits.length)){
+//			//			splits(k) = splits(k).withColumn("fold", lit(k))
+//			println("process_split=", k, "test count=", splits(k).count())
+//			splits(k).show(false)
+//			splits(k).repartition(1).write.format("tfrecords").option("recordType", "Example")
+//				.mode("overwrite").save(savePath + s"/" +  k.toString +"_fold/txtest.tfrecords")
+//			var train:Dataset[Row] = null
+//			for (j <- Array.range(0, splits.length)){
+//				if (j != k){
+//					train = if (train == null) splits(j)  else train.union(splits(j))
+//				}
+//			}
+//			println("train count=", train.count())
+//			train.show(false)
+//			train.repartition(1).write.format("tfrecords").option("recordType", "Example")
+//				.mode("overwrite").save(savePath + s"/" +  k.toString +"_fold/txtrain.tfrecords")
+//		}
 	}
 }
