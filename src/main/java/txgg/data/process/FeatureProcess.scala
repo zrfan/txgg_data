@@ -159,7 +159,7 @@ object FeatureProcess {
 			val min_dur = dur_list.min
 			val stats = StatCounter()
 			for(x <- dur_list) stats.merge(x)
-			Array(mean_dur, max_dur, min_dur, stats.mean, stats.max, stats.min, stats.stdev, stats.variance,
+			Array(math.log(mean_dur), math.log(max_dur), math.log(min_dur), stats.stdev, stats.variance,
 				stats.popStdev, stats.sampleStdev, stats.popVariance, stats.sampleVariance)
 		}
 		
@@ -171,9 +171,9 @@ object FeatureProcess {
 			.select(col("user_id"), col("dur").getItem(0).as("mean_dur"),
 				col("dur").getItem(1).as("max_dur"),
 				col("dur").getItem(2).as("min_dur"),
-				col("dur").getItem(3).as("mean_dur2"),
-				col("dur").getItem(4).as("max_dur2"),
-				col("dur").getItem(5).as("min_dur2"),
+//				col("dur").getItem(3).as("mean_dur2"),
+//				col("dur").getItem(4).as("max_dur2"),
+//				col("dur").getItem(5).as("min_dur2"),
 				col("dur").getItem(6).as("stdev"),
 				col("dur").getItem(7).as("variance"),
 				col("dur").getItem(8).as("popStdev"),
@@ -185,18 +185,18 @@ object FeatureProcess {
 		user_agg = user_agg.join(user_dur, usingColumn = "user_id")
 		user_agg = user_agg.drop("time_list")
 		// 最大点击特征统计
-		val max_feature_names = Array("product_id", "product_category", "advertiser_id", "industry")
-		for (name <- max_feature_names) {
-			val user_max_click_sql =
-				s"""select b.user_id, b.$name as max_click_$name, b.cnt from (
-				   |    select user_id, $name, cnt, row_number() over (partition by user_id order by cnt desc) rank
-				   |    from ( select user_id, $name, sum(click_times) as cnt from txgg_temp group by user_id, $name) a
-				   |  ) b where b.rank=1""".stripMargin
-			val user_max_product = sparkSession.sql(user_max_click_sql)
-//			println("user_max_click data")
-//			user_max_product.show(false)
-			user_agg = user_agg.join(user_max_product, usingColumn = "user_id")
-		}
+//		val max_feature_names = Array("product_id", "product_category", "advertiser_id", "industry")
+//		for (name <- max_feature_names) {
+//			val user_max_click_sql =
+//				s"""select b.user_id, b.$name as max_click_$name, b.cnt from (
+//				   |    select user_id, $name, cnt, row_number() over (partition by user_id order by cnt desc) rank
+//				   |    from ( select user_id, $name, sum(click_times) as cnt from txgg_temp group by user_id, $name) a
+//				   |  ) b where b.rank=1""".stripMargin
+//			val user_max_product = sparkSession.sql(user_max_click_sql)
+////			println("user_max_click data")
+////			user_max_product.show(false)
+//			user_agg = user_agg.join(user_max_product, usingColumn = "user_id")
+//		}
 		user_agg
 		// 窗口特征统计 , 3, 5, 7, 15, 30
 		val window_scope = Array(7)
@@ -428,6 +428,9 @@ object FeatureProcess {
 	
 	
 	def newUserList(full_click_data: Dataset[Row], sparkSession: SparkSession, numPartitions: Int, savePath: String, maxLen:Int): Unit ={
+		val user_agg = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
+		println("user_agg info")
+		user_agg.show(false)
 		full_click_data.createTempView("txgg_temp")
 		val data_sql =
 			s"""select cast(A.user_id as string), cast(A.age as string), cast(A.gender as string),
@@ -455,9 +458,6 @@ object FeatureProcess {
 			.map(p => (p._1, p._2, p._3, getUserSeq(p._4)))
 			.map(p => (p._1, p._2, p._3, p._4(0), p._4(1), p._4(2), p._4(3), p._4(4), p._4(5)))
 			.persist(StorageLevel.MEMORY_AND_DISK)
-		val schema = StructType(List(
-			StructField("user_id_label", ArrayType(StringType)), StructField("ad_seq", ArrayType(StringType))
-		))
 		val creative_schema = StructType(List(
 			StructField("user_id", IntegerType), StructField("age", IntegerType), StructField("gender", IntegerType),
 			StructField("creative_id", StringType), StructField("ad_id", StringType),
