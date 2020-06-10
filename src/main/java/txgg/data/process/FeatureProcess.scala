@@ -37,7 +37,7 @@ object FeatureProcess {
 		val full_click_data = getFullClickData(sparkSession, numPartitions, dataPath, savePath)
 		
 		if (func_name == "newuserlist"){
-			newUserList(full_click_data, sparkSession, numPartitions, savePath+"/userlist/")
+			newUserList(full_click_data, sparkSession, numPartitions, savePath+"/userlist-96/", 96)
 		}else if (func_name == "featuretest"){
 			featureTest(full_click_data, sparkSession, dataPath, savePath, numPartitions)
 		}else if(func_name == "makeadlist"){
@@ -427,7 +427,7 @@ object FeatureProcess {
 	}
 	
 	
-	def newUserList(full_click_data: Dataset[Row], sparkSession: SparkSession, numPartitions: Int, savePath: String): Unit ={
+	def newUserList(full_click_data: Dataset[Row], sparkSession: SparkSession, numPartitions: Int, savePath: String, maxLen:Int): Unit ={
 		full_click_data.createTempView("txgg_temp")
 		val data_sql =
 			s"""select cast(A.user_id as string), cast(A.age as string), cast(A.gender as string),
@@ -442,8 +442,8 @@ object FeatureProcess {
 			var res:Array[Array[String]] = Array[Array[String]]()
 			for (i <- Array.range(1, 7)){
 				var interest_list = time_ad_list.map(x => x(i))
-				if (interest_list.length > 64){
-					interest_list = interest_list.slice(interest_list.length-64, interest_list.length)
+				if (interest_list.length > maxLen){
+					interest_list = interest_list.slice(interest_list.length-maxLen, interest_list.length)
 				}
 				res = res :+ interest_list
 			}
