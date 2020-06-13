@@ -41,7 +41,7 @@ object FeatureProcess {
 		}else if (func_name == "featuretest"){
 			featureTest(full_click_data, sparkSession, dataPath, savePath, numPartitions)
 		}else if(func_name == "makeadlist"){
-			makeAdList(full_click_data, sparkSession, Array("creative_id", "ad_id", "product_id", "product_category", "advertiser_id", "industry"),
+			makeAdList(full_click_data, sparkSession, Array("creative_id", "ad_id", "product_id", "product_category", "advertiser_id", "industry", "time", "click_times"),
 				numPartitions, savePath+"/adlist/")
 		}
 	}
