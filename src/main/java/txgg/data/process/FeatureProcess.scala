@@ -428,9 +428,9 @@ object FeatureProcess {
 	
 	
 	def newUserList(full_click_data: Dataset[Row], sparkSession: SparkSession, numPartitions: Int, savePath: String, maxLen:Int): Unit ={
-		val user_agg = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
-		println("user_agg info")
-		user_agg.show(false)
+//		val user_agg = userFeatureProcess(full_click_data, sparkSession, savePath, numPartitions)
+//		println("user_agg info")
+//		user_agg.show(false)
 		full_click_data.createTempView("txgg_temp")
 		val data_sql =
 			s"""select cast(A.user_id as string), cast(A.age as string), cast(A.gender as string),
@@ -443,7 +443,7 @@ object FeatureProcess {
 			// time, creative_id, ad_id, product_id, product_category, advertiser_id, industry, click_times
 			val time_ad_list = list.map(x => x.split("#"))
 			var res:Array[Array[String]] = Array[Array[String]]()
-			for (i <- Array.range(1, 7)){
+			for (i <- Array.range(0, 8)){
 				var interest_list = time_ad_list.map(x => x(i))
 				if (interest_list.length > maxLen){
 					interest_list = interest_list.slice(interest_list.length-maxLen, interest_list.length)
@@ -456,19 +456,19 @@ object FeatureProcess {
 			.map(p => (p(0).asInstanceOf[String], p(1).asInstanceOf[String], p(2).asInstanceOf[String],
 				p(3).asInstanceOf[mutable.WrappedArray[String]].toArray))
 			.map(p => (p._1, p._2, p._3, getUserSeq(p._4)))
-			.map(p => (p._1, p._2, p._3, p._4(0), p._4(1), p._4(2), p._4(3), p._4(4), p._4(5)))
+			.map(p => (p._1, p._2, p._3, p._4(0), p._4(1), p._4(2), p._4(3), p._4(4), p._4(5), p._4(6), p._4(7)))
 			.persist(StorageLevel.MEMORY_AND_DISK)
 		val creative_schema = StructType(List(
 			StructField("user_id", IntegerType), StructField("age", IntegerType), StructField("gender", IntegerType),
-			StructField("creative_id", StringType), StructField("ad_id", StringType),
+			StructField("time", IntegerType), StructField("creative_id", StringType), StructField("ad_id", StringType),
 			StructField("product_id", StringType), StructField("product_category", StringType),
-			StructField("advertiser_id", StringType),StructField("industry", StringType)
+			StructField("advertiser_id", StringType),StructField("industry", StringType), StructField("click_times", StringType)
 		))
 		// 保存ad序列文件, uid, age, gender, creative_id, ad_id, product_id, product_category, advertiser_id, industry
 		val adlist_data = data.map(p => (p._1.toInt, p._2.toInt, p._3.toInt, p._4.mkString("#"), p._5.mkString("#"),
-			p._6.mkString("#"), p._7.mkString("#"), p._8.mkString("#"), p._9.mkString("#")))
+			p._6.mkString("#"), p._7.mkString("#"), p._8.mkString("#"), p._9.mkString("#"), p._10.mkString("#"), p._11.mkString("#")))
 		// 保存ad predict数据
-		val adlist_predict = adlist_data.filter(p => p._2==0 && p._3==0).map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6, p._7, p._8, p._9))
+		val adlist_predict = adlist_data.filter(p => p._2==0 && p._3==0).map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6, p._7, p._8, p._9, p._10, p._11))
 		val adlist_predict_df = sparkSession.createDataFrame(adlist_predict, creative_schema)
 		adlist_predict_df.show(20, false)
 		println("creative predict count=", adlist_predict_df.count())
@@ -478,7 +478,7 @@ object FeatureProcess {
 			.option("encoding", "utf-8").mode("overwrite")
 			.csv(path = savePath + "/all_predict.csv")
 		// 保存ad train数据
-		val adlist_train = adlist_data.filter(p => p._2!=0 && p._3!=0).map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6, p._7, p._8, p._9))
+		val adlist_train = adlist_data.filter(p => p._2!=0 && p._3!=0).map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6, p._7, p._8, p._9, p._10, p._11))
 		val adlist_train_df = sparkSession.createDataFrame(adlist_train, creative_schema)
 		adlist_train_df.show(20, false)
 		println("creative predict count=", adlist_train_df.count())
