@@ -460,7 +460,7 @@ object FeatureProcess {
 			.persist(StorageLevel.MEMORY_AND_DISK)
 		val creative_schema = StructType(List(
 			StructField("user_id", IntegerType), StructField("age", IntegerType), StructField("gender", IntegerType),
-			StructField("time", IntegerType), StructField("creative_id", StringType), StructField("ad_id", StringType),
+			StructField("time", StringType), StructField("creative_id", StringType), StructField("ad_id", StringType),
 			StructField("product_id", StringType), StructField("product_category", StringType),
 			StructField("advertiser_id", StringType),StructField("industry", StringType), StructField("click_times", StringType)
 		))
