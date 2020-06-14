@@ -466,7 +466,10 @@ object FeatureProcess {
 				}
 				res = res :+ interest_list
 				if (i == 7){
-					interest_list = time_ad_list.map(x => x(i)).map(x => x.toInt).sorted.sliding(2).map(x => x.last - x.head).map(x=>x.toString).toArray
+					var dur_list = time_ad_list.map(x => x(i)).map(x => x.toInt)
+					var arr: Array[Int] = Array(1)
+					arr = arr ++ dur_list
+					interest_list = arr.sorted.sliding(2).map(x => x.last - x.head).map(x=>x.toString).toArray
 					if (interest_list.length > maxLen){
 						interest_list = interest_list.slice(interest_list.length-maxLen, interest_list.length)
 					}
