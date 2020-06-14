@@ -66,6 +66,20 @@ object FeatureProcess {
 				.option("encoding", "utf-8").mode("overwrite")
 				.csv(path = savePath + "user_" + field +"_list.csv")
 		}
+		val field = "time"
+		val data_sql =
+			s"""select A.user_id, collect_list($field) as seq
+			   | from (select * from txgg_temp order by user_id,time) as A
+			   | group by A.user_id""".stripMargin
+		println("data_sql=", data_sql)
+		val creative_data = sparkSession.sql(data_sql).repartition(numPartitions)
+		val csv_data = creative_data.rdd.map(p => (p(0).asInstanceOf[Integer], p(1).asInstanceOf[mutable.WrappedArray[Integer]].toArray))
+			.map(p => Row(p._1, p._2.sorted.sliding(2).map(x => x.last - x.head).mkString("#")))
+		val csv_df = sparkSession.createDataFrame(csv_data, schema)
+		
+		csv_df.repartition(1).write.option("timestampFormat", "yyyy/MM/dd HH:mm:ss ZZ")
+			.option("encoding", "utf-8").mode("overwrite")
+			.csv(path = savePath + "user_" + "during" +"_list.csv")
 		
 	}
 	
@@ -447,13 +461,19 @@ object FeatureProcess {
 			for (i <- Array.range(0, 8)){
 				var interest_list = time_ad_list.map(x => x(i))
 				if (i == 7){
-					interest_list = interest_list.map(x => x.toFloat).sorted.sliding(2).map(x => x.last - x.head).map(x=>x.toString).toArray
+				
 				}
 				if (interest_list.length > maxLen){
 					interest_list = interest_list.slice(interest_list.length-maxLen, interest_list.length)
 				}
 				res = res :+ interest_list
 			}
+			var interest_list = time_ad_list.map(x => x(7))
+			interest_list = interest_list.map(x => x.toFloat).sorted.sliding(2).map(x => x.last - x.head).map(x=>x.toString).toArray
+			if (interest_list.length > maxLen){
+				interest_list = interest_list.slice(interest_list.length-maxLen, interest_list.length)
+			}
+			res = res :+ interest_list
 			res
 		}
 		val data = sparkSession.sql(data_sql).rdd.repartition(numPartitions)
@@ -464,9 +484,11 @@ object FeatureProcess {
 			.persist(StorageLevel.MEMORY_AND_DISK)
 		val creative_schema = StructType(List(
 			StructField("user_id", IntegerType), StructField("age", IntegerType), StructField("gender", IntegerType),
-			StructField("time", StringType), StructField("creative_id", StringType), StructField("ad_id", StringType),
+			 StructField("creative_id", StringType), StructField("ad_id", StringType),
 			StructField("product_id", StringType), StructField("product_category", StringType),
-			StructField("advertiser_id", StringType),StructField("industry", StringType), StructField("click_times", StringType)
+			StructField("advertiser_id", StringType),StructField("industry", StringType),
+			StructField("click_times", StringType),StructField("time", StringType),
+			StructField("dur", StringType)
 		))
 		// 保存ad序列文件, uid, age, gender, creative_id, ad_id, product_id, product_category, advertiser_id, industry
 		val adlist_data = data.map(p => (p._1.toInt, p._2.toInt, p._3.toInt, p._4.mkString("#"), p._5.mkString("#"),
