@@ -488,7 +488,7 @@ object FeatureProcess {
 			StructField("product_id", StringType), StructField("product_category", StringType),
 			StructField("advertiser_id", StringType),StructField("industry", StringType),
 			StructField("click_times", StringType),StructField("time", StringType),
-			StructField("dur", StringType)
+			StructField("during", StringType)
 		))
 		// 保存ad序列文件, uid, age, gender, creative_id, ad_id, product_id, product_category, advertiser_id, industry
 		val adlist_data = data.map(p => (p._1.toInt, p._2.toInt, p._3.toInt, p._4.mkString("#"), p._5.mkString("#"),
