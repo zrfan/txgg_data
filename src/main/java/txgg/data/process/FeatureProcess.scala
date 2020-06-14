@@ -74,7 +74,12 @@ object FeatureProcess {
 		println("data_sql=", data_sql)
 		val creative_data = sparkSession.sql(data_sql).repartition(numPartitions)
 		val csv_data = creative_data.rdd.map(p => (p(0).asInstanceOf[Integer], p(1).asInstanceOf[mutable.WrappedArray[Integer]].toArray))
-			.map(p => Row(p._1, p._2.sorted.sliding(2).map(x => x.last - x.head).mkString("#")))
+			.map(p => {
+				var dur_list = p._2.map(x=>x.toInt)
+				var arr: Array[Int] = Array(1)
+				arr = arr ++ dur_list
+				Row(p._1, arr.sorted.sliding(2).map(x => x.last - x.head).mkString("#"))
+			})
 		val csv_df = sparkSession.createDataFrame(csv_data, schema)
 		
 		csv_df.repartition(1).write.option("timestampFormat", "yyyy/MM/dd HH:mm:ss ZZ")
