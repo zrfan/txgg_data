@@ -434,9 +434,10 @@ object FeatureProcess {
 		full_click_data.createTempView("txgg_temp")
 		val data_sql =
 			s"""select cast(A.user_id as string), cast(A.age as string), cast(A.gender as string),
-	            collect_list(concat_ws("#", cast(time as string), cast(creative_id as string), cast(ad_id as string),
+	            collect_list(concat_ws("#", cast(creative_id as string), cast(ad_id as string),
                     cast(product_id as string),  cast(product_category as string),
-                    cast(advertiser_id as string), cast(industry as string), cast(click_times as string))) as seq
+                    cast(advertiser_id as string), cast(industry as string),
+                    cast(click_times as string), cast(time as string))) as seq
             from (select * from txgg_temp order by user_id,time) as A
             group by A.user_id,A.age,A.gender""".stripMargin
 		def getUserSeq(list: Array[String]): Array[Array[String]] ={
@@ -445,6 +446,9 @@ object FeatureProcess {
 			var res:Array[Array[String]] = Array[Array[String]]()
 			for (i <- Array.range(0, 8)){
 				var interest_list = time_ad_list.map(x => x(i))
+				if (i == 7){
+					interest_list = interest_list.map(x => x.toFloat).sorted.sliding(2).map(x => x.last - x.head).toList
+				}
 				if (interest_list.length > maxLen){
 					interest_list = interest_list.slice(interest_list.length-maxLen, interest_list.length)
 				}
