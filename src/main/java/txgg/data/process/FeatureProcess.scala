@@ -480,7 +480,7 @@ object FeatureProcess {
 			.map(p => (p(0).asInstanceOf[String], p(1).asInstanceOf[String], p(2).asInstanceOf[String],
 				p(3).asInstanceOf[mutable.WrappedArray[String]].toArray))
 			.map(p => (p._1, p._2, p._3, getUserSeq(p._4)))
-			.map(p => (p._1, p._2, p._3, p._4(0), p._4(1), p._4(2), p._4(3), p._4(4), p._4(5), p._4(6), p._4(7)))
+			.map(p => (p._1, p._2, p._3, p._4(0), p._4(1), p._4(2), p._4(3), p._4(4), p._4(5), p._4(6), p._4(7), p._4(8)))
 			.persist(StorageLevel.MEMORY_AND_DISK)
 		val creative_schema = StructType(List(
 			StructField("user_id", IntegerType), StructField("age", IntegerType), StructField("gender", IntegerType),
@@ -492,7 +492,8 @@ object FeatureProcess {
 		))
 		// 保存ad序列文件, uid, age, gender, creative_id, ad_id, product_id, product_category, advertiser_id, industry
 		val adlist_data = data.map(p => (p._1.toInt, p._2.toInt, p._3.toInt, p._4.mkString("#"), p._5.mkString("#"),
-			p._6.mkString("#"), p._7.mkString("#"), p._8.mkString("#"), p._9.mkString("#"), p._10.mkString("#"), p._11.mkString("#")))
+			p._6.mkString("#"), p._7.mkString("#"), p._8.mkString("#"), p._9.mkString("#"), p._10.mkString("#"),
+			p._11.mkString("#"), p._12.mkString("#")))
 		
 		
 		// 保存ad predict数据
