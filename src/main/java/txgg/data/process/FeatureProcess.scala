@@ -460,20 +460,20 @@ object FeatureProcess {
 			var res:Array[Array[String]] = Array[Array[String]]()
 			for (i <- Array.range(0, 8)){
 				var interest_list = time_ad_list.map(x => x(i))
-				if (i == 7){
 				
-				}
 				if (interest_list.length > maxLen){
 					interest_list = interest_list.slice(interest_list.length-maxLen, interest_list.length)
 				}
 				res = res :+ interest_list
+				if (i == 7){
+					interest_list = time_ad_list.map(x => x(i)).map(x => x.toFloat).sorted.sliding(2).map(x => x.last - x.head).map(x=>x.toString).toArray
+					if (interest_list.length > maxLen){
+						interest_list = interest_list.slice(interest_list.length-maxLen, interest_list.length)
+					}
+					res = res :+ interest_list
+				}
 			}
-			var interest_list = time_ad_list.map(x => x(7))
-			interest_list = interest_list.map(x => x.toFloat).sorted.sliding(2).map(x => x.last - x.head).map(x=>x.toString).toArray
-			if (interest_list.length > maxLen){
-				interest_list = interest_list.slice(interest_list.length-maxLen, interest_list.length)
-			}
-			res = res :+ interest_list
+			
 			res
 		}
 		val data = sparkSession.sql(data_sql).rdd.repartition(numPartitions)
@@ -497,7 +497,7 @@ object FeatureProcess {
 		
 		
 		// 保存ad predict数据
-		val adlist_predict = adlist_data.filter(p => p._2==0 && p._3==0).map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6, p._7, p._8, p._9, p._10, p._11))
+		val adlist_predict = adlist_data.filter(p => p._2==0 && p._3==0).map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6, p._7, p._8, p._9, p._10, p._11, p._12))
 		val adlist_predict_df = sparkSession.createDataFrame(adlist_predict, creative_schema)
 		adlist_predict_df.show(20, false)
 		println("creative predict count=", adlist_predict_df.count())
@@ -509,7 +509,7 @@ object FeatureProcess {
 		
 		
 		// 保存ad train数据
-		val adlist_train = adlist_data.filter(p => p._2!=0 && p._3!=0).map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6, p._7, p._8, p._9, p._10, p._11))
+		val adlist_train = adlist_data.filter(p => p._2!=0 && p._3!=0).map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6, p._7, p._8, p._9, p._10, p._11, p._12))
 		val adlist_train_df = sparkSession.createDataFrame(adlist_train, creative_schema)
 		adlist_train_df.show(20, false)
 		println("creative predict count=", adlist_train_df.count())
