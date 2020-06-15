@@ -481,31 +481,65 @@ object FeatureProcess {
 					res = res :+ interest_list
 				}
 			}
-			
 			res
 		}
-		val data = sparkSession.sql(data_sql).rdd.repartition(numPartitions)
-			.map(p => (p(0).asInstanceOf[String], p(1).asInstanceOf[String], p(2).asInstanceOf[String],
-				p(3).asInstanceOf[mutable.WrappedArray[String]].toArray))
-			.map(p => (p._1, p._2, p._3, getUserSeq(p._4)))
-			.map(p => (p._1, p._2, p._3, p._4(0), p._4(1), p._4(2), p._4(3), p._4(4), p._4(5), p._4(6), p._4(7), p._4(8)))
+		def getUserWindowSeq(sparkSession: SparkSession, numPartitions: Int): RDD[(String, Array[String])] = {
+			val dataSql =
+				s"""
+				   |with window_table as (select user_id, (cast(((time-1)/7) as int)) as window_num, click_times from txgg_temp)
+				   |select A.user_id, collect_list(concat_ws("#", A.window_num, A.cnt)) as seq from (
+				   |    select user_id, window_num, sum(click_times) as cnt from window_table group by user_id, window_num order by user_id, window_num
+				   |    ) A group by A.user_id
+				   |""".stripMargin
+			val user_window_seq = sparkSession.sql(dataSql).rdd.repartition(numPartitions)
+				.map(p => (p.getAs("user_id").asInstanceOf[String],
+					p.getAs("seq").asInstanceOf[mutable.WrappedArray[String]].toArray))
+				.map(p => {
+					val week_seq = p._2.map(x => x.split("#")).map(x => (x(0).toInt, x(1).toInt)).toMap
+					var res: Array[Int] = Array[Int]()
+					for (i <- Array.range(0, 91/7)){
+						var cnt: Int= 0
+						if (week_seq.contains(i)){
+							cnt = week_seq.get(i).get
+						}
+						res = res :+ cnt
+					}
+					(p._1, res.map(x => x.toString))
+				})
+				.persist(StorageLevel.MEMORY_AND_DISK)
+			user_window_seq
+		}
+		val user_window_seq = getUserWindowSeq(sparkSession, numPartitions)
+		user_window_seq.take(10).foreach(p => println("user_window_seq=", p._1, p._2.mkString("#")))
+		var data = sparkSession.sql(data_sql).rdd.repartition(numPartitions)
+			.map(p => (p.getAs("user_id").asInstanceOf[String], (p.getAs("age").asInstanceOf[String],
+				p.getAs("gender").asInstanceOf[String],
+				p.getAs("seq").asInstanceOf[mutable.WrappedArray[String]].toArray)))
+			.join(user_window_seq)
+		
+		val dataset = data.map(p => (p._1, p._2._1._1, p._2._1._2, p._2._1._3, p._2._2))
+			.map(p => (p._1, p._2, p._3, getUserSeq(p._4), p._5))
+			.map(p => (p._1, p._2, p._3, p._4(0), p._4(1), p._4(2), p._4(3), p._4(4), p._4(5), p._4(6), p._4(7), p._4(8), p._5))
 			.persist(StorageLevel.MEMORY_AND_DISK)
+		user_window_seq.unpersist()
 		val creative_schema = StructType(List(
 			StructField("user_id", IntegerType), StructField("age", IntegerType), StructField("gender", IntegerType),
-			 StructField("creative_id", StringType), StructField("ad_id", StringType),
+			StructField("creative_id", StringType), StructField("ad_id", StringType),
 			StructField("product_id", StringType), StructField("product_category", StringType),
-			StructField("advertiser_id", StringType),StructField("industry", StringType),
-			StructField("click_times", StringType),StructField("time", StringType),
-			StructField("during", StringType)
+			StructField("advertiser_id", StringType), StructField("industry", StringType),
+			StructField("click_times", StringType), StructField("time", StringType),
+			StructField("during", StringType), StructField("week_cnt", StringType)
 		))
+		
 		// 保存ad序列文件, uid, age, gender, creative_id, ad_id, product_id, product_category, advertiser_id, industry
-		val adlist_data = data.map(p => (p._1.toInt, p._2.toInt, p._3.toInt, p._4.mkString("#"), p._5.mkString("#"),
+		val adlist_data = dataset.map(p => (p._1.toInt, p._2.toInt, p._3.toInt, p._4.mkString("#"), p._5.mkString("#"),
 			p._6.mkString("#"), p._7.mkString("#"), p._8.mkString("#"), p._9.mkString("#"), p._10.mkString("#"),
-			p._11.mkString("#"), p._12.mkString("#")))
+			p._11.mkString("#"), p._12.mkString("#"), p._13.mkString("#")))
 		
 		
 		// 保存ad predict数据
-		val adlist_predict = adlist_data.filter(p => p._2==0 && p._3==0).map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6, p._7, p._8, p._9, p._10, p._11, p._12))
+		val adlist_predict = adlist_data.filter(p => p._2==0 && p._3==0)
+			.map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6, p._7, p._8, p._9, p._10, p._11, p._12, p._13))
 		val adlist_predict_df = sparkSession.createDataFrame(adlist_predict, creative_schema)
 		adlist_predict_df.show(20, false)
 		println("creative predict count=", adlist_predict_df.count())
@@ -517,7 +551,8 @@ object FeatureProcess {
 		
 		
 		// 保存ad train数据
-		val adlist_train = adlist_data.filter(p => p._2!=0 && p._3!=0).map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6, p._7, p._8, p._9, p._10, p._11, p._12))
+		val adlist_train = adlist_data.filter(p => p._2!=0 && p._3!=0)
+			.map(p => Row(p._1, p._2, p._3, p._4, p._5, p._6, p._7, p._8, p._9, p._10, p._11, p._12, p._13))
 		val adlist_train_df = sparkSession.createDataFrame(adlist_train, creative_schema)
 		adlist_train_df.show(20, false)
 		println("creative predict count=", adlist_train_df.count())
