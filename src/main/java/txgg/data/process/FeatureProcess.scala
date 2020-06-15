@@ -80,11 +80,40 @@ object FeatureProcess {
 				arr = arr ++ dur_list
 				Row(p._1, arr.sorted.sliding(2).map(x => x.last - x.head).mkString("#"))
 			})
-		val csv_df = sparkSession.createDataFrame(csv_data, schema)
+		var csv_df = sparkSession.createDataFrame(csv_data, schema)
 		
 		csv_df.repartition(1).write.option("timestampFormat", "yyyy/MM/dd HH:mm:ss ZZ")
 			.option("encoding", "utf-8").mode("overwrite")
 			.csv(path = savePath + "user_" + "during" +"_list.csv")
+		
+		// window seq
+		val dataSql =
+			s"""
+			   |with window_table as (select user_id, (cast(((time-1)/7) as int)) as window_num, click_times from txgg_temp)
+			   |select A.user_id, collect_list(concat_ws("#", A.window_num, A.cnt)) as seq from (
+			   |    select user_id, window_num, sum(click_times) as cnt from window_table group by user_id, window_num order by user_id, window_num
+			   |    ) A group by A.user_id
+			   |""".stripMargin
+		val user_window_seq = sparkSession.sql(dataSql).rdd.repartition(numPartitions)
+			.map(p => (p.getAs("user_id").asInstanceOf[String],
+				p.getAs("seq").asInstanceOf[mutable.WrappedArray[String]].toArray))
+			.map(p => {
+				val week_seq = p._2.map(x => x.split("#")).map(x => (x(0).toInt, x(1).toInt)).toMap
+				var res: Array[Int] = Array[Int]()
+				for (i <- Array.range(0, 91/7)){
+					var cnt: Int= 0
+					if (week_seq.contains(i)){
+						cnt = week_seq.get(i).get
+					}
+					res = res :+ cnt
+				}
+				Row(p._1, res.map(x => x.toString))
+			})
+		csv_df = sparkSession.createDataFrame(user_window_seq, schema)
+		
+		csv_df.repartition(1).write.option("timestampFormat", "yyyy/MM/dd HH:mm:ss ZZ")
+			.option("encoding", "utf-8").mode("overwrite")
+			.csv(path = savePath + "user_" + "window_seq" + "_list.csv")
 		
 	}
 	
