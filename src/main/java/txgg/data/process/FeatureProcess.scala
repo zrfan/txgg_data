@@ -107,7 +107,7 @@ object FeatureProcess {
 					}
 					res = res :+ cnt
 				}
-				Row(p._1, res.map(x => x.toString))
+				Row(p._1, res.map(x => x.toString).mkString("#"))
 			})
 		csv_df = sparkSession.createDataFrame(user_window_seq, schema)
 		
