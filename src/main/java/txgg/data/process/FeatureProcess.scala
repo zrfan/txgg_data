@@ -95,7 +95,7 @@ object FeatureProcess {
 			   |    ) A group by A.user_id
 			   |""".stripMargin
 		val user_window_seq = sparkSession.sql(dataSql).rdd.repartition(numPartitions)
-			.map(p => (p.getAs("user_id").asInstanceOf[String],
+			.map(p => (p.getAs("user_id").asInstanceOf[Integer],
 				p.getAs("seq").asInstanceOf[mutable.WrappedArray[String]].toArray))
 			.map(p => {
 				val week_seq = p._2.map(x => x.split("#")).map(x => (x(0).toInt, x(1).toInt)).toMap
