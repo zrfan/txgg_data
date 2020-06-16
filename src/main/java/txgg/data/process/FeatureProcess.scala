@@ -103,7 +103,7 @@ object FeatureProcess {
 						}
 						res = res :+ cnt
 					}
-					(p._1, res.map(x => x.toString))
+					(p._1.toString, res.map(x => x.toString))
 				})
 				.persist(StorageLevel.MEMORY_AND_DISK)
 			user_window_seq
