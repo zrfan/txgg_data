@@ -37,7 +37,7 @@ object FeatureProcess {
 		val full_click_data = getFullClickData(sparkSession, numPartitions, dataPath, savePath)
 		
 		if (func_name == "newuserlist"){
-			newUserList(full_click_data, sparkSession, numPartitions, savePath+"/userlist-96/", 96)
+			newUserList(full_click_data, sparkSession, numPartitions, savePath+"/userlist-64/", 64)
 		}else if (func_name == "featuretest"){
 			featureTest(full_click_data, sparkSession, dataPath, savePath, numPartitions)
 		}else if(func_name == "makeadlist"){
